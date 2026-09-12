@@ -70,9 +70,10 @@ def main(path="model_dataonly.pt", alpha=0.1, p=128):
     # ---- 1. trajectory accuracy (stable scenarios) ----
     rmse_stable = np.rad2deg(np.sqrt((err[st] ** 2).mean()))
     # fault-on vs post-fault pooled RMSE (Table 1: pooled within each region)
-    masks = t_out[None, :] < tc[st, None]          # (n_stable, T)
-    fault_on_pooled = np.rad2deg(np.sqrt((err[st][masks] ** 2).mean()))
-    post_fault_pooled = np.rad2deg(np.sqrt((err[st][~masks] ** 2).mean()))
+    et = err[st]                                           # (n_stable, n, T)
+    fault_mask = np.broadcast_to(t_out[None, None, :] < tc[st, None, None], et.shape)
+    fault_on_pooled = np.rad2deg(np.sqrt((et[fault_mask] ** 2).mean()))
+    post_fault_pooled = np.rad2deg(np.sqrt((et[~fault_mask] ** 2).mean()))
     # per-scenario mean error (alternative view)
     fault_on_err, post_fault_err = [], []
     for i in range(len(fb)):
@@ -123,9 +124,12 @@ def main(path="model_dataonly.pt", alpha=0.1, p=128):
     test_buses = np.unique(fb)
     cct_errs = np.array([abs(pred_cct(b) - true_cct(b)) for b in test_buses]) * 1000.0
 
-    # ---- 5. speedup vs time-domain simulation ----
+    # ---- 5. speedup vs time-domain simulation (rough; see measure_speedup.py) ----
     B = 64
     s_r = severity_enc(fb[:B], tc[:B], d, dev)
+    with torch.no_grad():
+        for _ in range(3):                     # warmup
+            predict(model, s_r, t, dev)
     t0 = time.time()
     for _ in range(20):
         predict(model, s_r, t, dev)
