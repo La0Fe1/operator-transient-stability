@@ -20,8 +20,8 @@ N_TEST_TC = 80
 SEED = 0
 
 
-def main():
-    model = ClassicalModel(case="39")
+def main(damping=0.0, out="data39.npz"):
+    model = ClassicalModel(case="39", damping=damping)
     n_buses = model.N                      # 39
     n = model.n                            # 10 machines
     t_out = np.arange(0.0, T_END + OUT_DT / 2, OUT_DT)
@@ -69,7 +69,7 @@ def main():
     pe_fault = np.array([model.fault_pe(b) for b in range(1, n_buses + 1)])
 
     np.savez_compressed(
-        "data39.npz",
+        out,
         # train
         fb_train=fb_train, tc_train=tc_train, y_train=tr["delta_coi"],
         s_train=tr["stable"],
@@ -83,10 +83,15 @@ def main():
         pe_fault=pe_fault,
         n_buses=n_buses, n_machines=n, t_end=T_END, out_dt=OUT_DT, t_max=T_MAX,
     )
-    print("saved data39.npz")
+    print(f"saved {out}")
     print("train stable ratio:", tr["stable"].mean().round(3))
     print("test  stable ratio:", te["stable"].mean().round(3))
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--damping", type=float, default=0.0)
+    ap.add_argument("--out", default="data39.npz")
+    a = ap.parse_args()
+    main(a.damping, a.out)

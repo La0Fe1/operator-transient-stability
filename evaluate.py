@@ -52,8 +52,8 @@ def cross_conformal(scores: np.ndarray, alpha: float):
     return q_loo, coverage
 
 
-def main(path="model_dataonly.pt", alpha=0.1, p=128):
-    d = np.load("data39.npz")
+def main(path="model_dataonly.pt", alpha=0.1, p=128, datafile="data39.npz", damping=0.0):
+    d = np.load(datafile)
     n = int(d["n_machines"])
     t_out = d["t_out"]
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -101,7 +101,7 @@ def main(path="model_dataonly.pt", alpha=0.1, p=128):
     q_loo = np.full_like(scores, q)
 
     # ---- 4. CCT estimation (binary search with the operator) ----
-    model_cct = ClassicalModel(case="39")
+    model_cct = ClassicalModel(case="39", damping=damping)
 
     def true_cct(bus):
         lo, hi = 0.01, 0.8
@@ -160,5 +160,7 @@ if __name__ == "__main__":
     ap.add_argument("--model", default="model_dataonly.pt")
     ap.add_argument("--alpha", type=float, default=0.1)
     ap.add_argument("--p", type=int, default=128)
+    ap.add_argument("--data", default="data39.npz")
+    ap.add_argument("--damping", type=float, default=0.0)
     args = ap.parse_args()
-    main(args.model, args.alpha, args.p)
+    main(args.model, args.alpha, args.p, args.data, args.damping)
