@@ -1,0 +1,38 @@
+# generated data and checkpoints (regenerate with the scripts in this repo)
+*.npz
+*.pt
+
+# figures and paper sources (not part of the reproduction package)
+*.pdf
+*.png
+fig_*
+paper.tex
+paper_zh.tex
+references.bib
+paper.*
+*.aux
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.spl
+*.xdv
+*.log
+
+# internal notes
+PLAN.md
+RESULTS.md
+REVIEW.md
+
+# figure generation (figures are in the paper, not needed for reproduction)
+make_figures.py
+make_fig_arch.py
+make_fig_arch_zh.py
+
+# internal experiments not reported in the paper
+train_postfault.py
+generate_data_postfault.py
+compose_eval.py
+
+__pycache__/
+*.pyc
