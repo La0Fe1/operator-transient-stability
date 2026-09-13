@@ -9,18 +9,18 @@ import torch
 
 from model import DeepONet, trunk_derivs, physics_residual
 
-CLIP = 3.0 * np.pi  # saturate the regression target beyond +/-540 deg
+CLIP_DEFAULT = 3.0  # in units of pi; saturate the regression target beyond +/-540 deg
 
 
 def to_torch(x, device, dtype=torch.float32):
     return torch.as_tensor(x, dtype=dtype, device=device)
 
 
-def evaluate(model, t, s, y_true, device):
+def evaluate(model, t, s, y_true, device, clip):
     model.eval()
     with torch.no_grad():
         pred = model(s, t)
-        target = torch.clamp(y_true, -CLIP, CLIP)
+        target = torch.clamp(y_true, -clip * np.pi, clip * np.pi)
         mse = ((pred - target) ** 2).mean().item()
         rmse = (pred - target).pow(2).mean(dim=(1, 2)).sqrt()
     return mse, rmse.cpu().numpy()
@@ -37,12 +37,14 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--tag", type=str, default="dataonly")
     ap.add_argument("--data", type=str, default="data39.npz")
+    ap.add_argument("--K", type=int, default=16)
+    ap.add_argument("--clip", type=float, default=3.0)
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"device={device}  lambda_phys={args.lambda_phys}  p={args.p}", flush=True)
+    print(f"device={device}  lambda_phys={args.lambda_phys}  p={args.p}  K={args.K}  clip={args.clip}", flush=True)
 
     d = np.load(args.data)
     t_out = to_torch(d["t_out"], device)[:, None]
@@ -73,7 +75,7 @@ def main():
     tc_train = to_torch(d["tc_train"], device)
     st_train = torch.as_tensor(d["s_train"].astype(bool), device=device)  # (B,)
 
-    model = DeepONet(s_train.shape[1], n, p=args.p, t_scale=t_end).to(device)
+    model = DeepONet(s_train.shape[1], n, p=args.p, K=args.K, t_scale=t_end).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
 
@@ -99,7 +101,7 @@ def main():
             delta = torch.einsum("bnp,tp->bnt", Bcoef, tau)
 
             # class-balanced MSE (stable vs unstable contribute equally)
-            target = torch.clamp(y, -CLIP, CLIP)
+            target = torch.clamp(y, -args.clip * np.pi, args.clip * np.pi)
             se = ((delta - target) ** 2).mean(dim=(1, 2))     # (b,)
             n_st = st.sum().clamp(min=1)
             n_un = (~st).sum().clamp(min=1)
@@ -123,7 +125,7 @@ def main():
             opt.step()
         sched.step()
 
-        mse_val, _ = evaluate(model, t_out, s_val, y_val, device)
+        mse_val, _ = evaluate(model, t_out, s_val, y_val, device, args.clip)
         if mse_val < best_val:
             best_val = mse_val
             torch.save(model.state_dict(), f"model_{args.tag}.pt")
