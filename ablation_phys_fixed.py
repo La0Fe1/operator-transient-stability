@@ -14,13 +14,13 @@ CLIP = 3.0 * np.pi
 
 
 def train_phys(s_dim, n, te, dev, enc, y_train, st_train, t_out, lambda_phys,
-               E, Pm, M, G, Bimag, Mtot, s_train, tc_train):
+               E, Pm, M, G, Bimag, Mtot, s_train, tc_train, stride=5):
     torch.manual_seed(0); np.random.seed(0)
     model = DeepONet(s_dim, n, p=512, t_scale=te).to(dev)
     opt = torch.optim.Adam(model.parameters(), lr=1e-3)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=600)
     nscen = len(y_train); nb = max(1, nscen // 128)
-    t_phys = t_out[::5]; tp_col = t_phys[:, 0]
+    t_phys = t_out[::stride]; tp_col = t_phys[:, 0]
     for ep in range(600):
         model.train()
         perm = torch.randperm(nscen, device=dev)
@@ -88,12 +88,18 @@ def main():
     B_t = torch.as_tensor(d["B"], dtype=torch.float32, device=dev)
     tc_train = torch.as_tensor(d["tc_train"], device=dev)
 
-    for lam in [0.001, 0.01]:
-        m = train_phys(n + 1, n, te, dev, sev_enc, y_train, st_train, t_out, lam,
-                       E, Pm_t, M_t, G_t, B_t, float(d["Mtot"]), s_tr, tc_train)
-        p, a = eval_pooled(m, s_te, y_test, st_test, t_out, dev)
-        print(f"phys-loss (corrected residual) lambda={lam}: pooled={p:.2f} deg, clf={a:.3f}", flush=True)
-        torch.save(m.state_dict(), f"model_phys_fixed_{lam}.pt")
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--lam", type=float, default=0.001)
+    ap.add_argument("--stride", type=int, default=5)
+    a = ap.parse_args()
+
+    m = train_phys(n + 1, n, te, dev, sev_enc, y_train, st_train, t_out, a.lam,
+                   E, Pm_t, M_t, G_t, B_t, float(d["Mtot"]), s_tr, tc_train, stride=a.stride)
+    p, acc = eval_pooled(m, s_te, y_test, st_test, t_out, dev)
+    print(f"phys-loss (corrected) lambda={a.lam} stride={a.stride}: pooled={p:.2f} deg, clf={acc:.3f}",
+          flush=True)
+    torch.save(m.state_dict(), f"model_phys_fixed_{a.lam}_s{a.stride}.pt")
 
 
 if __name__ == "__main__":
