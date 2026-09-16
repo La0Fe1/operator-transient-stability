@@ -36,3 +36,4 @@ compose_eval.py
 
 __pycache__/
 *.pyc
+*.out
