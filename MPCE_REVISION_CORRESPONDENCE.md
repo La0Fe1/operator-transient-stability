@@ -138,3 +138,31 @@
 | 吞吐加速比 | ≈700× | **214×**（线程固定+重复测量）；端到端 CCT 318× |
 | 118 分类 / RMSE | 95.0% / 118.8° | **92.9% / 121.9°**（自定义算例定位） |
 | 门控覆盖率 | 0.946（混入校准样本） | 全门控 0.914 / oracle 0.946，纯度 96.6%，错误放行 1.8% |
+
+
+## 二、第二篇审稿报告(B1-B6 + b1-b8,2026-09-17)一一对应表
+
+### 大瑕疵
+| 编号 | 问题 | 处理 | 结果 |
+|---|---|---|---|
+| **B1** 公开复现入口与算法不一致 | 92ed627 仍是旧代码(abs 丢符号/插值分位数/末时刻判据/无事件对齐) | 本地修复已提交 **2e59908**(conformal_tighter.py 保留符号、evaluate.py 次序统计量+max-over-time、dataset.py 事件对齐、requirements 锁版),待推送到 GitHub 并打 tag | 论文与发布代码一致 |
+| **B2** N-2 训练组成与声明冲突 | 论文称"单一算子 N-0+N-1 训练" | 核实代码:model_n1_p512(N-0+N-1,9990 场景,25 训练线)与 model_n2_p512(N-0+N-1+N-2,8748 场景)是**两个模型**;论文 6.3/表III/贡献4/结论已改为如实描述两个实验与 held-out 评估 | 文本已修,数字不变 |
+| **B3** 稳定子群覆盖≠筛选风险 | 0% 解析比例与 214× 提速不能直接相乘 | 6.6 补 α=0.4(57%)逐水平解析比例(decidable_vs_alpha.py 数据),保留 TDS 回退与 wrong-release 1.8%(2/109)表述 | 文本已修 |
+| **B4** 二分不能保证首次 CCT | 非单调判据 | **协议改为 5 ms 扫描定位首次稳定→失稳变号 + 局部二分细化至 0.1 ms**(cct_first_crossing.py / cct_first_crossing_all.py);39 节点主结果重算:**mean |err| 25.0 ms(原 25.2),逐母线差 ≤3 ms**,bus 12 不变(453/248);N-1/N-2/118 批量重算中 | 主数值已更新(25.0) |
+| **B5** 118 标幺基准 | 未说明基准约定 | 6.10 补充:H 与 x'd 直接按系统 MVA 基准解释(自洽约定);参数表在仓库 | 文本已修 |
+| **B6** 算子必要性 | MLP 分类/CCT 更优 | 6.2 补:MLP 高准确率不带入轨迹质量(43.1° vs 36.3° pooled RMSE,无连续时间求值,Table II) | 文本已修 |
+
+### 小瑕疵
+| 编号 | 处理 |
+|---|---|
+| b1 | 摘要/结论/6.1 "to within 25.2 ms" → "mean absolute CCT error of 25.0 ms" |
+| b2 | "couples it with conformal certification" → "calibrated trajectory uncertainty quantification" |
+| b3 | 148° 明确为 pairwise-difference **prediction error** bound(摘要/结论/4.4/6.6) |
+| b4 | "conditioning on the prediction breaks exchangeability" → "oracle-conditioned diagnostic over the truly stable population, not a deployment guarantee" |
+| b5 | 4.2 补 trunk 输入含 normalized raw time(model.py 为 1+2K 维) |
+| b6 | Word 公式中 align 对齐符 & 已从 OMML 删除(2 处) |
+| b7 | Fig.3 图注 x 轴改为 target coverage level 1−α |
+| b8 | AI 披露已存在;工具名由作者最终具名(现为中性表述) |
+
+### 数值核验(评估报告已确认)
+混淆矩阵 318/6/38/598(合计 960,acc 95.4167%)、Precision 0.98148、Recall 0.89326、F1 0.93529、157/178=0.88202、28/0.131=213.74、9735/30.6=318.14 — 全部自洽,与表 I 一致。

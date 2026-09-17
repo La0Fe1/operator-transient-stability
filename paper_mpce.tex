@@ -52,7 +52,7 @@
 \newcommand{\latRK}{9735}             % end-to-end single-fault CCT latency, TDS (ms)
 \newcommand{\latSU}{318}              % end-to-end speedup
 \newcommand{\latSweep}{12.3}          % 100-point sweep end-to-end (ms)
-\newcommand{\cctNtwo}{18.7}             % N-2 sampled-pairs mean CCT error (ms)
+\newcommand{\cctNtwo}{39.7}             % N-2 sampled-pairs mean CCT error (ms)
 
 \begin{document}
 
@@ -281,8 +281,7 @@ band on the trajectory, in the statistical sense made precise in Section~\ref{se
 
 \subsection{Physics-informed fault encoding}
 A central obstacle to generalization across fault locations is that a bus index is an arbitrary
-label with no physical meaning: replacing it with a one-hot vector gives the branch network no
-information about physically similar buses. We instead encode a fault at bus $k$ by the vector of
+label: a one-hot vector gives the branch network no information about physically similar buses. We instead encode a fault at bus $k$ by the vector of
 initial accelerations it induces, computed from the swing equation at the pre-fault equilibrium,
 \begin{equation}
 a_i(k) = \frac{P_{mi} - P_{ei}^{\mathrm{f}}(k)}{M_i},
@@ -440,8 +439,8 @@ constructed from $12$ fault buses held out entirely from training, so test perfo
 generalization to unseen fault locations, while the validation set is drawn from the training
 buses. Event-aligned labels differ from the pre-alignment reference (which kept the fault on until
 the first grid point after $t_c$) on exactly one of $960$ test and one of $2160$ training
-scenarios, both at the stability boundary. The CCT search range $[0.01,0.8]$ s covers the observed 39-bus CCTs ($0.13$--$0.58$ s
-over all buses, $0.13$--$0.45$ s on the held-out buses).
+scenarios, both at the stability boundary. The CCT search range $[0.01,0.8]$ s covers the observed 39-bus CCTs ($0.13$--$0.58$ s;
+$0.13$--$0.45$ s on the held-out buses).
 
 \subsection{Baselines and ablations}
 We compare against the same DeepONet with (i) a one-hot fault encoding; (ii) a physics-residual
@@ -483,8 +482,8 @@ training seeds the classification accuracy is \accSeed{} and the per-scenario me
 $20.2^\circ~\pm~1.4^\circ$, so the reported values are representative. All test metrics other than
 conformal coverage (RMSE, classification, CCT) are computed on the full $960$-scenario held-out
 set; only conformal coverage is restricted to a disjoint evaluation half
-(Section~\ref{sec:method}). The speedup is reported under two separate protocols on identical CPU hardware, with
-single-threaded implementations and median/P95 statistics.
+(Section~\ref{sec:method}). The speedup is reported under two separate protocols on identical CPU hardware,
+single-threaded, with median/P95 statistics.
 \emph{Throughput}: over repeated batches of $64$ scenarios the operator evaluates a $401$-point
 trajectory at \timCPU{} ms per scenario against \timRK{} ms for the RK4 reference ($0.5$ ms step,
 $4$ s horizon), a $\approx\timSU{}\times$ gap. \emph{End-to-end latency}: a single fault
@@ -626,8 +625,8 @@ reflecting the harder combined task. The same encoding and architecture apply to
 without modification: on held-out line pairs the operator attains $43.4^\circ$ RMSE and $92.9\%$
 accuracy, because the post-fault severity vector is simply evaluated from the admittance matrix
 with both lines removed. The multi-topology operator also estimates the CCT on held-out
-combinations: $19.4$ ms mean absolute error on unseen trip lines, $31.9$ ms on held-out fault
-buses, and \cctNtwo{} ms on held-out $N{-}2$ line pairs (sampled); split-conformal coverage on
+combinations: $19.7$ ms mean absolute error on unseen trip lines (sampled), $34.1$ ms on held-out fault
+buses (sampled), and \cctNtwo{} ms on held-out $N{-}2$ line pairs (sampled); split-conformal coverage on
 these splits is reported in Section~\ref{sec:results}.
 
 \begin{table}[t]
@@ -649,7 +648,7 @@ Line pairs ($N{-}2$, unseen) & $43.4^\circ$ & $92.9\%$ & \cctNtwo{} ms \\
 
 \subsection{Sample efficiency of the operator}
 \label{sec:sampleeff}
-A motivation for the operator architecture is its low-rank inductive bias. Training the DeepONet
+Training the DeepONet
 and the pointwise MLP baseline on $10\%$, $25\%$, $50\%$, and $100\%$ of the training scenarios
 (three seeds each), the operator attains $56.1^\circ$ RMSE versus $65.2^\circ$ for the MLP at
 $10\%$ of the data (a $\approx9^\circ$ advantage), $\approx8^\circ$ at $25\%$, and
@@ -745,9 +744,7 @@ constraint satisfied by many trajectories, so it adds regularization without inf
 Training on boundary-aware data (clearing times sampled within $[0.4,1.2]\times$CCT per fault
 bus) raises the pooled post-fault RMSE from \rmsePost{}$^\circ$ (uniform) to $70.8^\circ$
 (boundary-aware): near-boundary trajectories respond sharply to small parameter changes at the
-stability bifurcation, the regime the conformal band is designed to flag (the rise can reflect
-both intrinsic difficulty and the shifted sampling; we report the observation without attributing
-a single cause). Stratifying the test scenarios by their distance to the TDS CCT quantifies this:
+stability bifurcation, the regime the conformal band is designed to flag. Stratifying the test scenarios by their distance to the TDS CCT quantifies this:
 more than $100$ ms inside the boundary the misclassification rate is $8.8\%$; within $30$ ms it
 rises to $20.0\%$ ($n{=}60$); and within $10$ ms it reaches $46.2\%$ ($n{=}13$, descriptive). The
 sharpest decisions are the least reliable. Replacing the branch network with self-attention does
@@ -780,8 +777,8 @@ classification accuracy and $121.9^\circ$ stable-trajectory RMSE. The test set i
 stable, so a majority-class baseline would score $74.6\%$; \pctACCb{} therefore reflects real
 discrimination, close to the 39-bus \pctACC{} despite $5.4\times$ more generators and $3.0\times$
 more buses. The higher trajectory RMSE reflects the larger state space and the much lower CCTs of
-the assigned 118-bus case ($0.008$--$0.135$ s), with a CCT error of $13.3$ ms mean absolute (max
-$54.7$ ms) on the $24$ held-out buses. The split-conformal interval attains $0.918$ coverage at
+the assigned 118-bus case ($0.008$--$0.135$ s), with a CCT error of $9.9$ ms mean absolute (max
+$22.3$ ms) among the 11 buses with a defined first crossing. The split-conformal interval attains $0.918$ coverage at
 $\alpha{=}0.1$ with a half-width of $596.4^\circ$---larger than the $180^\circ$ stability
 threshold, so on the 118-bus case the interval validates the coverage mechanism but is vacuous
 for decisions; the pairwise score and richer calibration data
@@ -798,8 +795,7 @@ wrong-release statistics of Section~\ref{sec:results}, and the heuristic CCT ban
 numeric trajectory bound, and on the 118-bus case the per-machine band is currently vacuous. The $\pi$-in-$4$ s criterion is the operational label of this study; whether the first
 swing governs multi-swing instability in every scenario of richer models was not established
 here. Third, governors, power-system stabilizers, and dynamic loads are not modeled; the one-axis,
-exciter, and damped extensions retrain the same architecture and encoding rather than
-transferring weights, although the encoding itself needs no modification. Fourth, the pointwise
+exciter, and damped extensions retrain the same architecture rather than transferring weights. Fourth, the pointwise
 MLP baseline is slightly worse than the operator on trajectory RMSE at full data
 ($43.1^\circ$ versus \rmseAll{}$^\circ$ pooled), and the low-data advantage is indicative rather
 than established (Section~\ref{sec:sampleeff}); under the \emph{same} conformal and CCT protocol
@@ -862,11 +858,9 @@ Writing -- review \& editing. Zhicheng Zeng: Validation, Writing -- review \& ed
 Jinan University, Guangzhou, China. His research interests include power system stability and
 machine learning.\\
 \textbf{Jiale Wang} is pursuing the B.Eng. degree at the International Energy College, Jinan
-University, Guangzhou, China. His research interests include power system simulation and
-artificial intelligence.\\
+University, Guangzhou, China. His research interests include power system simulation and AI.\\
 \textbf{Jiayong Liu} is pursuing the B.Eng. degree at the International Energy College, Jinan
-University, Guangzhou, China. His research interests include power system dynamics and
-data-driven methods.\\
+University, Guangzhou, China. His research interests include power system dynamics.\\
 \textbf{Zhicheng Zeng} is pursuing the B.Eng. degree at the International Energy College, Jinan
 University, Guangzhou, China. His research interests include power system analysis.
 
