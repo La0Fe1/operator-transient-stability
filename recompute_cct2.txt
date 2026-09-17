@@ -1,0 +1,7 @@
+4-seed acc (max-over-time): [np.float64(95.42), np.float64(92.19), np.float64(94.27), np.float64(93.96)]  mean=93.96 std=1.16
+118 CCT: mean=-13.30 |mean|=13.30 max=54.7 ms (n=24)
+one-axis CCT: mean=-22.83 |mean|=23.33 max=148.1 ms
+damped CCT: mean=-27.58 |mean|=30.82 max=202.9 ms
+N-1 held-out lines CCT (10 lines x 2 buses): mean=-16.53 |mean|=19.42 max=49.8 ms
+N-1 held-out buses CCT (12 buses): mean=-27.49 |mean|=31.93 max=193.0 ms
+N-2 sampled pairs CCT (10 pairs x 1 bus): mean=-18.74 |mean|=18.74 max=35.1 ms

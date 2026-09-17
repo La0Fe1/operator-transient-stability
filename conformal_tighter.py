@@ -26,6 +26,7 @@ def main():
     with torch.no_grad():
         pred = m(severity_enc(fb, tc, d, dev), t).cpu().numpy()
     err = np.abs(pred - y)
+    signed_err = pred - y          # signed errors for the pairwise score (A1)
 
     # per-machine worst-over-time scores: (n_stable, n)
     R = err[st].max(axis=2)
@@ -39,13 +40,15 @@ def main():
     Rg_cal, Rg_eva = Rg[idx[:n_cal]], Rg[idx[n_cal:]]
 
     # global score (paper's setting)
-    qg = np.quantile(Rg_cal, min(1.0, (1 - ALPHA) * (1 + 1.0 / n_cal)))
+    k = int(np.ceil((n_cal + 1) * (1 - ALPHA)))
+    qg = np.sort(Rg_cal)[k - 1] if k <= n_cal else np.inf
     covg = (Rg_eva <= qg).mean()
     print(f"global max score       : q={np.rad2deg(qg):6.1f} deg, coverage={covg:.3f}, pairwise 2q={np.rad2deg(2*qg):.0f} deg")
 
     # Bonferroni: per-machine level alpha/n
     a_bonf = ALPHA / n
-    q_bonf = np.array([np.quantile(R_cal[:, i], min(1.0, (1 - a_bonf) * (1 + 1.0 / n_cal)))
+    k_b = int(np.ceil((n_cal + 1) * (1 - a_bonf)))
+    q_bonf = np.array([np.sort(R_cal[:, i])[k_b - 1] if k_b <= n_cal else np.inf
                        for i in range(n)])
     cov_bonf = (R_eva <= q_bonf[None, :]).all(axis=1).mean()
     pw_bonf = (q_bonf[:, None] + q_bonf[None, :]).max()
@@ -54,7 +57,8 @@ def main():
 
     # Sidak: per-machine level 1-(1-alpha)^(1/n)
     a_sidak = 1 - (1 - ALPHA) ** (1 / n)
-    q_sidak = np.array([np.quantile(R_cal[:, i], min(1.0, (1 - a_sidak) * (1 + 1.0 / n_cal)))
+    k_s = int(np.ceil((n_cal + 1) * (1 - a_sidak)))
+    q_sidak = np.array([np.sort(R_cal[:, i])[k_s - 1] if k_s <= n_cal else np.inf
                         for i in range(n)])
     cov_sidak = (R_eva <= q_sidak[None, :]).all(axis=1).mean()
     pw_sidak = (q_sidak[:, None] + q_sidak[None, :]).max()
@@ -64,12 +68,15 @@ def main():
           f"global={2*qg < np.pi}, Bonferroni={pw_bonf < np.pi}, Sidak={pw_sidak < np.pi}")
 
     # ---- direct pairwise-difference score (the quantity the pi-criterion needs) ----
-    # R_pw(s) = max_{i,j,t} |e_i(t) - e_j(t)|
-    e = err[st]                                     # (n_stable, n, T)
+    # A1: R_pw(s) = max_{i,j,t} |e_i(t) - e_j(t)| with SIGNED errors, so that
+    # oppositely signed machine errors add rather than cancel.
+    e = signed_err[st]                              # (n_stable, n, T) signed
     diffs = np.abs(e[:, None, :, :] - e[:, :, None, :])   # (n_stable, n, n, T)
     R_pw = diffs.max(axis=(1, 2, 3))                # worst pairwise-difference error per scenario
     R_pw_cal, R_pw_eva = R_pw[idx[:n_cal]], R_pw[idx[n_cal:]]
-    q_pw = np.quantile(R_pw_cal, min(1.0, (1 - ALPHA) * (1 + 1.0 / n_cal)))
+    # A4: order-statistic quantile
+    k = int(np.ceil((n_cal + 1) * (1 - ALPHA)))
+    q_pw = np.sort(R_pw_cal)[k - 1] if k <= n_cal else np.inf
     cov_pw = (R_pw_eva <= q_pw).mean()
     print(f"direct pairwise score : q={np.rad2deg(q_pw):6.1f} deg, coverage={cov_pw:.3f} "
           f"-> certified pairwise bound={np.rad2deg(q_pw):.0f} deg (below pi: {q_pw < np.pi})")

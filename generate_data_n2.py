@@ -104,27 +104,38 @@ def simulate_batch_multi(model, fb, trips, tc, t_end, dt, out_dt):
     out_t = np.arange(0.0, t_end + out_dt / 2, out_dt)
     n_out = out_t.size
     delta_out = np.zeros((B, n, n_out)); stable = np.ones(B, dtype=bool)
-    step_per_out = max(1, int(round(out_dt / dt)))
-    k = 0; k_out = 0; t_cur = 0.0
-    while t_cur < t_end + dt / 2:
-        if k % step_per_out == 0 and k_out < n_out:
-            coi = delta - (M * delta).sum(axis=1, keepdims=True) / Mtot
-            delta_out[:, :, k_out] = coi
-            stable &= ((coi.max(1) - coi.min(1)) < np.pi)
-            k_out += 1
-        if t_cur >= t_end:
-            break
-        Ynow = np.where((t_cur < tc)[:, None, None], yf, yp)
-        def deriv(d, w, Y):
-            dd = ws * (w - 1.0); dw = (Pm - pe(d, Y) - D * (w - 1.0)) / M
-            return dd, dw
-        d1, w1 = deriv(delta, omega, Ynow)
-        d2, w2 = deriv(delta + .5 * dt * d1, omega + .5 * dt * w1, Ynow)
-        d3, w3 = deriv(delta + .5 * dt * d2, omega + .5 * dt * w2, Ynow)
-        d4, w4 = deriv(delta + dt * d3, omega + dt * w3, Ynow)
-        delta += (dt / 6) * (d1 + 2 * d2 + 2 * d3 + d4)
-        omega += (dt / 6) * (w1 + 2 * w2 + 2 * w3 + w4)
-        t_cur += dt; k += 1
+
+    def deriv(d, w, Y):
+        dd = ws * (w - 1.0); dw = (Pm - pe(d, Y) - D * (w - 1.0)) / M
+        return dd, dw
+
+    # event-split RK4: the fault-on network is used exactly until t_c, and the
+    # state is linearly interpolated onto the exact output grid
+    delta_out[:, :, 0] = delta - (M * delta).sum(axis=1, keepdims=True) / Mtot
+    t_cur = np.zeros(B)
+    prev_delta = np.zeros_like(delta); prev_t = np.zeros(B)
+    for k_out in range(1, n_out):
+        target = out_t[k_out]
+        while (t_cur < target - 1e-15).any():
+            step_mask = t_cur < target - 1e-15
+            prev_delta[step_mask] = delta[step_mask]
+            prev_t[step_mask] = t_cur[step_mask]
+            fault_on = step_mask & (t_cur < tc)
+            h = np.where(fault_on, np.minimum(dt, tc - t_cur), dt)
+            Ynow = np.where(fault_on[:, None, None], yf, yp)
+            d1, w1 = deriv(delta, omega, Ynow)
+            d2, w2 = deriv(delta + 0.5 * h[:, None] * d1, omega + 0.5 * h[:, None] * w1, Ynow)
+            d3, w3 = deriv(delta + 0.5 * h[:, None] * d2, omega + 0.5 * h[:, None] * w2, Ynow)
+            d4, w4 = deriv(delta + h[:, None] * d3, omega + h[:, None] * w3, Ynow)
+            delta[step_mask] += (h[step_mask, None] / 6) * (d1 + 2 * d2 + 2 * d3 + d4)[step_mask]
+            omega[step_mask] += (h[step_mask, None] / 6) * (w1 + 2 * w2 + 2 * w3 + w4)[step_mask]
+            t_cur[step_mask] += h[step_mask]
+        hw = t_cur - prev_t
+        alpha = np.where(hw > 0, (target - prev_t) / hw, 0.0)[:, None]
+        coi = prev_delta + alpha * (delta - prev_delta)
+        coi = coi - (M * coi).sum(axis=1, keepdims=True) / Mtot
+        delta_out[:, :, k_out] = coi
+        stable &= ((coi.max(1) - coi.min(1)) < np.pi)
     return {"t": out_t, "delta_coi": delta_out, "stable": stable}
 
 

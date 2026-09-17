@@ -1,0 +1,1 @@
+one-hot p=512 (max-over-time): acc=88.02%, pooled stable RMSE=141.4 deg

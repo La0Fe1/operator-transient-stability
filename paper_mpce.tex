@@ -1,0 +1,873 @@
+\documentclass[5p,times]{elsarticle}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{bm}
+\usepackage[hidelinks]{hyperref}
+
+\renewcommand{\thetable}{\Roman{table}}
+\newcommand{\sgn}{\mathrm{sgn}}
+\newcommand{\E}{\mathbf{E}}
+\newcommand{\Pm}{P_m}
+\newcommand{\Pe}{P_e}
+% ---- numbers exported from recompute_all.py (single source of truth) ----
+\newcommand{\rmseFault}{2.3}          % pooled stable-trajectory RMSE, fault-on region (deg)
+\newcommand{\rmsePost}{36.9}          % pooled stable-trajectory RMSE, post-fault region (deg)
+\newcommand{\rmseAll}{36.3}           % pooled stable-trajectory RMSE, full horizon (deg)
+\newcommand{\pctACC}{95.4\%}          % main 39-bus classification accuracy (max-over-time)
+\newcommand{\pctACCb}{92.9\%}         % 118-bus classification accuracy
+\newcommand{\ccterr}{25.0}            % main 39-bus mean CCT error (ms)
+\newcommand{\pairq}{148}              % certified pairwise bound q_pw (deg, alpha=0.1)
+\newcommand{\accSeed}{94.0\%~$\pm$~1.2\%} % four-seed classification accuracy
+\newcommand{\confmat}{318, 6, 38, 598} % TP, FP, FN, TN
+\newcommand{\fone}{0.935}             % F1 of the stable class
+\newcommand{\cctbusref}{218, 211, 185, 208, 453, 217, 196, 190, 197, 183, 234, 129}
+\newcommand{\cctbuspred}{211, 195, 174, 201, 248, 206, 195, 203, 195, 186, 244, 111}
+\newcommand{\cctbuserr}{$-7$, $-16$, $-12$, $-7$, $-205$, $-11$, $-1$, $+13$, $-2$, $+3$, $+10$, $-18$}
+\newcommand{\randRMSE}{110.1}         % uniform-random predictor RMSE on stable test trajectories (deg)
+\newcommand{\sevMLPacc}{93.0\%}       % severity-MLP classification accuracy (same encoding as operator)
+\newcommand{\sevMLPcct}{47.0}         % severity-MLP mean CCT error (ms)
+\newcommand{\mlpcct}{20.7}            % pointwise MLP mean CCT error under same protocol (ms)
+\newcommand{\grucct}{33.5}            % GRU mean CCT error under same protocol (ms)
+\newcommand{\paircov}{0.893}          % pairwise-score empirical coverage (alpha=0.1)
+\newcommand{\qhatdeg}{110.1}          % per-machine band half-width q (deg, alpha=0.1)
+\newcommand{\decfrac}{0\%}            % fraction of predicted-stable resolved by spread+q<pi
+\newcommand{\wrrate}{1.8\%}           % wrong-release rate of the predicted-stable gate
+\newcommand{\wrnum}{2}                % wrong-release count
+\newcommand{\wrdem}{109}              % denominator of wrong-release rate
+\newcommand{\gatepurity}{96.6\%}      % gate purity (evaluation half, protocol-correct)
+\newcommand{\mondA}{76.1}             % Mondrian band half-width, peak <45 deg (deg)
+\newcommand{\mondC}{124.6}            % Mondrian band half-width, peak >90 deg (deg)
+\newcommand{\trajbus}{11}             % Fig 2 scenario fault bus
+\newcommand{\trajtc}{0.170}          % Fig 2 scenario clearing time (s)
+\newcommand{\trajband}{70.8}          % Fig 2 first-swing band half-width (deg)
+\newcommand{\gatecovAll}{0.914}       % coverage over predicted-stable evaluation scenarios
+\newcommand{\gatecovTS}{0.946}        % oracle-conditioned coverage over true-stable&pred-stable
+\newcommand{\gatenum}{56}             % n of true-stable&pred-stable subset
+\newcommand{\timCPU}{0.131}           % operator per-scenario CPU throughput (ms)
+\newcommand{\timRK}{28.0}             % RK4 per-scenario CPU time (ms)
+\newcommand{\timSU}{214}              % throughput speedup
+\newcommand{\latEnd}{30.6}            % end-to-end single-fault CCT latency, operator+encoding (ms)
+\newcommand{\latRK}{9735}             % end-to-end single-fault CCT latency, TDS (ms)
+\newcommand{\latSU}{318}              % end-to-end speedup
+\newcommand{\latSweep}{12.3}          % 100-point sweep end-to-end (ms)
+\newcommand{\cctNtwo}{18.7}             % N-2 sampled-pairs mean CCT error (ms)
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{A Physics-Encoded Neural Operator with Conformal Trajectory Bands for Fast Transient Stability Screening}
+
+\author[1]{Zhenyu~Liu\corref{cor1}}
+\ead{3293857014@qq.com}
+\author[1]{Jiale~Wang}
+\author[1]{Jiayong~Liu}
+\author[1]{Zhicheng~Zeng}
+\cortext[cor1]{Corresponding author.}
+\affiliation[1]{organization={International Energy College, Jinan University},
+            city={Guangzhou},
+            postcode={510632},
+            country={China}}
+
+\begin{abstract}
+Transient stability assessment (TSA) predicts whether a power system remains synchronized
+after a large disturbance and estimates the critical clearing time (CCT) of faults. Time-domain
+simulation (TDS) is accurate but slow, whereas machine-learning classifiers are fast but discard
+the rotor-angle trajectory and provide no error bound. We introduce a physics-encoded neural
+operator mapping a fault scenario to the full center-of-inertia rotor-angle trajectory, with a
+distribution-free, finite-sample error band attached through split conformal prediction. The key
+enabler is a physics-informed input encoding: a fault is represented by the vector of initial
+accelerations it induces on each machine, computed from the swing equation rather than a bus
+index, letting the operator generalize to unseen fault locations and $N{-}1$/$N{-}2$ topologies.
+On the IEEE 39-bus system it classifies stability with \pctACC{} accuracy under a max-over-time
+$\pi$-separation criterion, attains a mean absolute CCT error of \ccterr{} ms, and runs
+$\approx\timSU{}\times$ faster than TDS on identical hardware. A directly calibrated pairwise
+score bounds the machine-angle spread error to \pairq{}$^\circ$ at $\alpha{=}0.1$; the band is
+coverage-valid, but the screening rule then resolves none of the scenarios, so the resolvable
+fraction is reported across $\alpha$ with a TDS fallback---the conformal output is a calibrated
+trajectory band, not a stability certificate. Retrained on the IEEE 118-bus system it reaches
+\pctACCb{} accuracy, and the encoding carries over unchanged to higher-fidelity generator
+models. A physics-residual loss does not help, and generalization across operating points remains
+open. To our knowledge, this is the first work coupling a trajectory-level operator with
+conformal trajectory bands and CCT extraction in TSA.
+\end{abstract}
+
+\begin{keyword}
+conformal prediction \sep critical clearing time \sep neural operator \sep physics-informed
+machine learning \sep power system dynamics \sep transient stability
+\end{keyword}
+
+\end{frontmatter}
+
+\section{Introduction}
+Transient stability is the ability of a power system to remain in synchronism
+after a large disturbance such as a three-phase fault. Its assessment is a safety-critical,
+recurring task: for a given contingency and fault clearing time, system operators must know
+whether the system survives and, ideally, how much clearing-time margin remains before it loses
+synchronism~\cite{sauer1998dynamics, kundur1994power}. The standard tool is time-domain
+simulation (TDS), which integrates the nonlinear swing equations and is accurate but
+computationally expensive, particularly when screening many fault locations, clearing times, and
+topology changes~\cite{stott1979power}.
+
+This cost has motivated a large body of machine-learning surrogates for TSA: classifiers such as
+support vector machines, decision trees, or deep networks~\cite{alimi2020review} that map
+operating-condition or fault features to a binary stable/unstable label. Fast as they are, these
+surrogates discard the rotor-angle trajectory (and thus any stability \emph{margin} or CCT
+estimate), do not generalize naturally across fault locations (a one-hot bus index yields no
+signal for unseen buses), and output no uncertainty or error bound, so an operator cannot know
+when the surrogate is trustworthy.
+
+We address all three limitations with a physics-encoded neural operator equipped with conformal
+trajectory bands. The operator is a Deep Operator Network (DeepONet)~\cite{lu2021learning}, whose
+branch encodes a fault scenario and whose Fourier-feature trunk encodes time; their contraction
+yields the full center-of-inertia (COI) rotor-angle trajectory rather than merely a label. The
+fault scenario is encoded by a \emph{physics-informed} vector: the initial acceleration
+$(P_{mi}-P_{ei}^{\mathrm{f}})/M_i$ that the fault induces on each machine, computed directly from
+the swing equation, which allows the operator to generalize across unseen fault locations. Split
+conformal prediction~\cite{lei2018distribution} attaches a finite-sample, distribution-free error
+band to every predicted trajectory, together with a tighter score that directly bounds the
+pairwise angle difference entering the stability criterion. Throughout, ``physics-informed''
+refers to the input encoding derived from the swing equation, not to a residual-constrained model,
+and the conformal output is a calibrated trajectory band, not a stability certificate.
+
+Our contributions are as follows.
+\begin{itemize}
+\item We couple, to our knowledge for the first time, a trajectory-level neural operator with
+conformal trajectory bands for \emph{rotor-angle} trajectories and with CCT extraction. Prior
+neural operators for power systems target component-level dynamics~\cite{karampinis2025neural};
+conformalized operator regression has appeared for post-fault bus-voltage
+trajectories~\cite{mollaali2025conformalized}, targeting voltage rather than rotor-angle stability
+and without CCT extraction; and prior conformal work on TSA predicts only a binary stability
+label~\cite{lu2026confidence}. Section~\ref{sec:related} positions these works relative to
+ours, and the ``first'' claim is scoped to rotor-angle trajectory bands with CCT extraction.
+\item We show that a physics-informed \emph{input} encoding---the swing-equation acceleration
+vector---enables generalization across unseen fault locations, and we quantify the difference
+against one-hot and graph baselines.
+\item We provide a split-conformal calibration layer that yields a finite-sample,
+distribution-free error band on the trajectory and a directly calibrated pairwise-angle bound
+below the $\pi$ threshold at $\alpha{=}0.1$, together with the resolvable fraction, the
+wrong-release rate, and a CCT estimate compared against classical direct criteria; the derived
+CCT band is a heuristic interval without a formal guarantee (Section~\ref{sec:method}).
+\item We extend the encoding with a post-fault severity vector and show that the operator
+generalizes to held-out $N{-}1$ line trips and $N{-}2$ line pairs.
+\item We report trajectory accuracy together with an ablation of an auxiliary physics-residual
+loss, including a negative result for this system and protocol: physics is injected more reliably
+through the input encoding than through a residual loss.
+\end{itemize}
+
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Neural operators and physics-informed learning in power systems}
+Neural operators learn maps between function spaces rather than between fixed-size vectors; the
+dominant architectures are DeepONet~\cite{lu2021learning} (branch--trunk contraction) and the
+Fourier Neural Operator~\cite{li2021fourier}. Physics-informed neural networks
+(PINNs)~\cite{raissi2019physics} embed governing-equation residuals into the training loss.
+
+Recent work has begun applying these tools to power systems. Karampinis et
+al.~\cite{karampinis2025neural} propose a DeepONet-based framework for modeling power-system
+\emph{components}, targeting fast dynamic simulation and digital twins, but do not address TSA,
+the CCT, or uncertainty quantification. Moya et al.~\cite{moya2025conformal} attach
+split-conformal intervals to DeepONets (Conformalized-DeepONet) for operator regression on
+canonical dynamical systems, and physics-informed graphical surrogates have been applied to power
+flow and optimal power flow~\cite{huang2025optimal, chen2025power}. Our work instead targets the
+post-fault rotor-angle trajectory operator and couples it with calibrated trajectory
+uncertainty quantification.
+
+\subsection{Learning-based transient stability assessment}
+Learning-based TSA has long been dominated by classifiers that predict a stable/unstable label
+from hand-crafted features~\cite{alimi2020review}; more recent graph models with
+distribution-aware pooling~\cite{chen2022distribution} report high accuracies on the IEEE 39-bus
+system under in-sample or per-sample protocols. Under our held-out-bus protocol with the same raw
+features, however, a standard graph convolutional classifier reaches only $76.0\%$ and a stronger
+residual graph model $77.3\%$ (Section~\ref{sec:results}), and graph models produce no
+trajectory, CCT, or uncertainty bound.
+
+A few works predict the post-fault trajectory rather than only the label; these are closest in
+spirit to ours, but they provide no error bounds. Event-structured PINNs model the pre-fault,
+fault-on, and post-fault stages with hard state chaining and a differentiable CCT
+boundary~\cite{hao2026event}; their error-propagation theorem is complementary to our
+finite-sample conformal band. PINN-based acceleration of time-domain simulation
+\cite{stiasny2021transient} trains a network with physics residuals, whereas we learn the
+scenario-to-trajectory map with a physics-informed input encoding; fast CCT calculation for
+mixed synchronous/asynchronous generation~\cite{wang2025fast} is complementary to our TDS-based
+reference.
+
+Confidence-aware TSA has begun to emerge. Lu et al.~\cite{lu2026confidence} combine a large
+language model with conformal prediction to produce prediction sets for a binary stability label,
+but they predict neither the trajectory nor the CCT and do not use a physics-informed operator.
+The closest works to ours are the conformalized operator regression of Mollaali et
+al.~\cite{mollaali2025conformalized}, which predicts post-fault \emph{bus-voltage} trajectories
+without rotor angles, CCT extraction, or topology generalization, and the Conformalized-DeepONet
+framework of Moya et al.~\cite{moya2025conformal}, which establishes operator-regression bands on
+canonical dynamical systems. Probabilistic and Bayesian operator frameworks
+(DeepONet-grid-UQ)~\cite{moya2023deeponet} assume Gaussian or posterior-sampling uncertainty,
+and risk-controlling quantile operators (UQNO)~\cite{ma2024calibrated} learn a second operator
+for pointwise radii; our split-conformal bands are distribution-free and require only a
+calibration set on top of the trained operator.
+
+Across the axes that matter for TSA---physics-derived input encoding, unseen fault-bus and
+topology generalization, the calibration unit, and CCT extraction---no single prior work combines
+a physics encoding that generalizes across fault locations and topologies, a directly calibrated
+bound on the pairwise spread entering the stability criterion, and CCT extraction.
+
+Classical direct methods remain strong CCT baselines: the transient-energy-function (TEF) / potential-energy-boundary-surface (PEBS)
+method~\cite{athay1979transient} and the individual-machine equal-area criterion
+(IMEAC)~\cite{wang2018individual} extract the CCT from machine-level energy criteria
+(Section~\ref{sec:results}). Our contribution is the combination of a trajectory-level neural
+operator with a physics-informed fault encoding and a conformal error band, which yields a CCT
+estimate alongside the trajectory; the derived CCT band is heuristic and carries no formal
+coverage guarantee (Section~\ref{sec:method}).
+
+\section{Problem Formulation}
+\label{sec:problem}
+
+\subsection{Classical multi-machine model}
+We consider the classical model of transient stability, in which each synchronous generator is
+represented as a constant voltage source $E_i$ behind a transient reactance
+$x'_{di}$~\cite{sauer1998dynamics, kundur1994power}. Under the standard reduction, loads are
+converted to constant admittances and the network is Kron-reduced to the internal generator
+nodes, yielding an $n\times n$ admittance matrix $\bm{Y}$. The dynamics of generator $i$ obey the
+swing equations
+\begin{align}
+\frac{d\delta_i}{dt} &= \omega_s(\omega_i - 1), \label{eq:swing1}\\
+\frac{d\omega_i}{dt} &= \frac{P_{mi} - P_{ei}(\bm{\delta}) - D_i(\omega_i - 1)}{2H_i}, \label{eq:swing2}
+\end{align}
+where $\delta_i$ is the rotor angle, $\omega_i$ the per-unit speed, $H_i$ the inertia constant,
+$D_i$ the damping coefficient, $P_{mi}$ the mechanical power, and $\omega_s$ the synchronous
+speed. The electrical power is
+\begin{equation}
+P_{ei}(\bm{\delta}) = \sum_{j=1}^{n} E_i E_j\bigl[ G_{ij}\cos(\delta_i-\delta_j)
++ B_{ij}\sin(\delta_i-\delta_j)\bigr],
+\end{equation}
+with $G_{ij}=\Re\{Y_{ij}\}$ and $B_{ij}=\Im\{Y_{ij}\}$. We use the undamped case $D_i=0$, which
+is standard for the classical model and gives the undamped (energy-margin) stability boundary; a
+damped variant is examined in Section~\ref{sec:results}. Because the
+equations depend only on angle differences, it is convenient to work in the center-of-inertia
+(COI) frame, defining
+\begin{equation}
+\tilde\delta_i = \delta_i - \delta_{\mathrm{COI}}, \qquad
+\delta_{\mathrm{COI}} = \frac{\sum_i M_i \delta_i}{\sum_i M_i}, \quad M_i = 2H_i.
+\end{equation}
+
+A three-phase fault at a bus is modeled by adding a large shunt admittance to that bus and
+reducing the network during the fault; the fault is cleared after a clearing time $t_c$,
+optionally tripping a line (an $N{-}1$ contingency). Reference trajectories integrate
+\eqref{eq:swing1}--\eqref{eq:swing2} with a fourth-order Runge--Kutta scheme at a $0.5$ ms step,
+splitting each step at the clearing instant $t_c$ so the fault-on network is used exactly until
+$t_c$ (event alignment); the state is recorded on a $0.01$ s output grid. A trajectory is
+\emph{stable} if the maximum pairwise angle difference remains below $\pi$ at every output-grid
+point over the simulation horizon---the $\pi$-separation criterion, the operational label used
+throughout the paper. It applies to the selected model, horizon, and criterion and is not claimed
+to coincide with infinite-horizon synchronism for arbitrary systems
+(Section~\ref{sec:discussion}).
+
+\subsection{Problem statement}
+Let a fault scenario be described by a fault location (bus), an optional set of tripped lines, and
+a clearing time $t_c$. We seek the map
+$\mathcal{G}\colon(\text{scenario})\mapsto\{\tilde\delta_i(t)\}_{i=1}^{n}$, $t\in[0,T]$,
+returning the COI-referenced rotor-angle trajectory, together with (i) a stability
+classification under the $\pi$-separation criterion, (ii) the critical clearing time
+$t_{\mathrm{CCT}}$, the first clearing time at which the criterion is violated as $t_c$
+increases from zero---a dense sweep found a single dominant stable-to-unstable crossing on most
+buses (1--5 local flips at the $5$ ms resolution, concentrated on the two largest-CCT buses), so
+on the held-out buses this coincides with the largest stable $t_c$---and (iii) a calibrated error
+band on the trajectory, in the statistical sense made precise in Section~\ref{sec:method}.
+
+\section{Method}
+\label{sec:method}
+
+\subsection{Physics-informed fault encoding}
+A central obstacle to generalization across fault locations is that a bus index is an arbitrary
+label with no physical meaning: replacing it with a one-hot vector gives the branch network no
+information about physically similar buses. We instead encode a fault at bus $k$ by the vector of
+initial accelerations it induces, computed from the swing equation at the pre-fault equilibrium,
+\begin{equation}
+a_i(k) = \frac{P_{mi} - P_{ei}^{\mathrm{f}}(k)}{M_i},
+\label{eq:severity}
+\end{equation}
+where $P_{ei}^{\mathrm{f}}(k)$ is the electrical power of machine $i$ during the fault at bus
+$k$, evaluated at the pre-fault angles---precisely the initial rate of change of per-unit speed in
+\eqref{eq:swing2} (the angular acceleration is $\omega_s a_i$). Dividing by $M_i$ makes machines
+of widely different inertia contribute comparably, and continuity in the fault admittance maps
+physically similar faults to nearby encodings. The branch input is the concatenation of
+$\bm{a}(k)\in\mathbb{R}^n$ and the normalized clearing time. The encoding is not claimed to be
+injective---two scenarios with similar encodings can still differ in later response near the
+stability boundary---but Section~\ref{sec:results} shows it transfers the information needed for
+this task, while the conformal band flags the scenarios where the prediction is least reliable.
+
+For $N{-}1$ contingencies, in which a line is tripped at fault clearing, the post-fault reduced
+admittance and the post-fault dynamics both change. We encode this change symmetrically with a
+\emph{post-fault} severity vector,
+\begin{equation}
+\tilde a_i(l) = \frac{P_{mi} - P_{ei}^{\mathrm{post}}(l)}{M_i},
+\label{eq:postseverity}
+\end{equation}
+where $P_{ei}^{\mathrm{post}}(l)$ is the post-fault electrical power at the pre-fault angles with
+line $l$ removed; for the intact network $\tilde a_i=0$. The full scenario encoding concatenates
+the fault-on severity \eqref{eq:severity}, the post-fault severity \eqref{eq:postseverity}, and
+the clearing time. For $N{-}2$ contingencies the same vector is evaluated with both lines removed:
+$\tilde{\bm a}$ is always an $n$-dimensional vector evaluated at the pre-fault angles, so the
+encoding dimension is unchanged and the same branch network applies without modification.
+
+\subsection{Neural operator architecture}
+We use a DeepONet. The branch network $b_\theta$ maps the scenario encoding to a matrix of basis
+coefficients $\bm{B}\in\mathbb{R}^{n\times p}$; the trunk network $\tau_\phi$ maps time to $p$
+basis functions. The predicted trajectory is the contraction
+\begin{equation}
+\hat{\bm{\delta}}(s,t) = \bm{B}(s)\,\tau(t) \in \mathbb{R}^n .
+\end{equation}
+Because the swing dynamics are oscillatory, we feed the trunk a Fourier feature embedding of
+time, $\{\cos(2\pi k t/T),\sin(2\pi k t/T)\}_{k=1}^{K}$, alongside the normalized raw time,
+before a small multilayer perceptron,
+so the trunk represents the natural oscillation modes more efficiently than a plain perceptron.
+The trunk is smooth
+in $t$, so its time derivatives are available by automatic differentiation for the optional
+physics residual below. Fig.~\ref{fig:arch} summarizes the proposed pipeline.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_arch.pdf}
+\caption{Overview of the proposed physics-informed neural operator ($N{-}0$ configuration shown;
+$N{-}1$/$N{-}2$ additionally use the post-fault severity vector): a fault scenario is mapped
+through the physics-informed encoding to a branch network, whose coefficients contract with a
+Fourier-feature trunk to yield the predicted rotor-angle trajectory $\hat{\bm\delta}$; split
+conformal prediction then attaches a distribution-free error envelope.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Physics-residual loss (auxiliary)}
+Following the PINN paradigm, we optionally add a residual of the post-fault swing equation in the
+COI frame. Differentiating the COI definition under $D_i=0$ gives
+$M_i \ddot{\tilde\delta}_i = \omega_s(P_{mi}-P_{ei}) - M_i\omega_s c(t)$, where
+$c(t)=\sum_j(P_{mj}-P_{ej})/M_{\mathrm{tot}}$ is the COI acceleration and
+$M_{\mathrm{tot}}=\sum_j M_j$. Dividing by $M_i$ so that machines of widely different inertia
+contribute comparably (otherwise the $H{=}500$ s aggregate machine at bus~39 dominates the sum),
+the per-machine residual enforced at a set $\mathcal{C}$ of collocation times in the post-fault
+region $t\ge t_c$ is
+\begin{equation}
+\mathcal{L}_{\mathrm{phys}} = \frac{1}{|\mathcal{C}|}\sum_{t\in\mathcal{C},\,i}
+\Bigl[ \ddot{\tilde\delta}_i - \omega_s(P_{mi}-P_{ei}(\tilde{\bm{\delta}}))/M_i + \omega_s c(t) \Bigr]^2 .
+\label{eq:physloss}
+\end{equation}
+The per-machine division by $M_i$ makes the term comparable across machines; it retains
+acceleration units and is a soft penalty rather than a hard constraint. The $\omega_s$ factor
+enters through the frequency-to-angle relation and fixes the scaling between the curvature and
+power-mismatch terms. The total loss is the data loss plus $\lambda\mathcal{L}_{\mathrm{phys}}$,
+enforced only in the post-fault region (the fault-on admittance varies per scenario) at every
+fifth output time point; denser collocation is ablated in Section~\ref{sec:results}.
+
+\subsection{Conformal calibration}
+The trajectory operator alone gives no indication of its own error. We use split conformal
+prediction~\cite{lei2018distribution} to attach a finite-sample, distribution-free band to the
+single-machine COI angles, calibrated on \emph{stable} scenarios: unstable trajectories diverge
+and carry errors orders of magnitude beyond any useful bound, so the band is defined on the stable
+subpopulation by design. For a scenario $s$, the nonconformity score is the worst-case prediction error over
+machines and output-grid time points,
+\begin{equation}
+R(s) = \max_{i,t\in\mathcal{T}_{\mathrm{grid}}} \bigl| \hat{\tilde\delta}_i(t;s) - \tilde\delta_i(t;s) \bigr| .
+\end{equation}
+We split the $N$ stable scenarios of the held-out test set (Section~\ref{sec:setup})---which the
+operator never saw during training and which are drawn at random from the same held-out-bus
+sampling distribution, so calibration and evaluation scores are exchangeable---into a calibration
+half ($N_{\mathrm{cal}}$) and a disjoint evaluation half ($N_{\mathrm{eva}}$). For target
+miscoverage $\alpha$, the bound $\hat q$ is the $k$-th order statistic of the calibration scores
+with $k=\lceil(N_{\mathrm{cal}}+1)(1-\alpha)\rceil$, the standard finite-sample split-conformal
+rule. For a new scenario exchangeable with the calibration scenarios and drawn from the same
+distribution \emph{conditionally on being truly stable}, the whole predicted trajectory is then
+covered simultaneously on the output grid: $\Pr\{ \max_{i,t\in\mathcal{T}_{\mathrm{grid}}}
+\bigl| \hat{\tilde\delta}_i(t) - \tilde\delta_i(t) \bigr| \le \hat q \mid \text{scenario stable} \}
+\ge 1-\alpha$, i.e., with probability at least $1-\alpha$ over exchangeable stable scenarios,
+every single-machine COI angle at every \emph{output-grid} point lies within $\hat q$ of the
+truth. Three limits are
+explicit: the guarantee is marginal over the stable subpopulation (it does not cover misclassified
+unstable scenarios); it applies to the finite output grid (a denser-grid check found no missed
+criterion crossings, Section~\ref{sec:results}); and it is a calibrated trajectory band, not a
+stability certificate. By the triangle inequality, the pairwise angle difference relevant to the
+stability criterion is bounded by $2\hat q$, which at $\alpha{=}0.1$ exceeds the $\pi$ threshold.
+
+To bound the decision quantity directly, we also calibrate a pairwise-difference score over the
+signed per-machine errors,
+\begin{equation}
+R_{\mathrm{pw}}(s) = \max_{i,j,t\in\mathcal{T}_{\mathrm{grid}}} \bigl| \hat e_i(t) - \hat e_j(t) \bigr|, \qquad
+\hat e_i(t) = \hat{\tilde\delta}_i(t) - \tilde\delta_i(t),
+\end{equation}
+which scores exactly the pairwise angle spread appearing in the $\pi$-separation criterion; the
+errors $\hat e_i$ keep their sign, so that oppositely signed machine errors add rather than
+cancel. As shown in Section~\ref{sec:results}, $R_{\mathrm{pw}}$ bounds the pairwise-difference
+prediction error to \pairq{}$^\circ$ at $\alpha{=}0.1$---below the $\pi$ threshold, but too wide to certify decisions
+in practice: the rule $\mathrm{spread}+\hat q_{\mathrm{pw}}<\pi$ resolves \decfrac{} of the
+predicted-stable cases at $\alpha{=}0.1$, rising to $31\%$ at $\alpha{=}0.3$ and $67\%$ at
+$\alpha{=}0.5$ as the bound tightens. The pairwise bound is therefore a screening aid used with a
+TDS fallback for the unresolved fraction, not a stand-alone decision rule. Multiplicity-corrected
+per-machine bounds (Bonferroni/\v{S}id\'ak) do not tighten the pairwise bound
+(Section~\ref{sec:results}).
+
+A CCT band can be derived from the per-machine interval: clearing times whose predicted
+trajectory, shifted by $\pm 2\hat q$ in spread space, cannot reach the $\pi$ threshold are
+declared stable with margin, and clearing times whose shifted spread exceeds $\pi$ for \emph{all}
+shifts are declared unstable; the remainder forms the band, found by the same binary search with
+the shifted criterion. Because the trajectory bound at one $t_c$ does not transfer across $t_c$
+(the CCT is a nonlinear functional of the trajectory), this CCT band is \emph{heuristic}: it
+carries no formal coverage guarantee and is reported as a screening aid
+(Section~\ref{sec:results}).
+
+\subsection{Critical clearing time estimation}
+Given the operator, the CCT of a fault is the first clearing time at which the criterion is
+violated. Because neither the operator's criterion nor the reference is guaranteed monotone in
+$t_c$, a $5$ ms sweep over $[0.01,0.8]$ s locates the first stable-to-unstable sign change, which
+is then refined by local bisection to $0.1$ ms; the same first-crossing protocol (with the
+system-dependent range $[0.005,0.2]$ s) is applied to the TDS reference, so the two CCT estimates
+are directly comparable. The refinement tolerance is the search resolution, not the physical CCT
+accuracy; the reference uses the event-aligned RK4 scheme of Section~\ref{sec:problem}
+(convergence verified at a $0.25$ ms step), and both judge stability on the $0.01$ s grid.
+
+\section{Experimental Setup}
+\label{sec:setup}
+
+\subsection{Test system and data}
+We use the IEEE 39-bus New England system with $10$ machines, whose static data are the standard
+published values and whose dynamic parameters ($H$, $x'_{d}$) are the canonical
+classical-model values~\cite{sauer1998dynamics, athay1979transient}; the specific parameter
+values and their source are tabulated in the code repository. The reference simulator integrates
+\eqref{eq:swing1}--\eqref{eq:swing2} with the event-aligned RK4 scheme of Section~\ref{sec:problem}
+at a $0.5$ ms step over a $4$ s horizon. We draw a fault bus uniformly over all $39$ buses and a
+clearing time uniformly in $[0.03,0.55]$ s, producing approximately $40\%$ stable scenarios. The
+dataset has $2160$ training, $540$ validation, and $960$ test scenarios; the test set is
+constructed from $12$ fault buses held out entirely from training, so test performance measures
+generalization to unseen fault locations, while the validation set is drawn from the training
+buses. Event-aligned labels differ from the pre-alignment reference (which kept the fault on until
+the first grid point after $t_c$) on exactly one of $960$ test and one of $2160$ training
+scenarios, both at the stability boundary. The CCT search range $[0.01,0.8]$ s covers the observed 39-bus CCTs ($0.13$--$0.58$ s
+over all buses, $0.13$--$0.45$ s on the held-out buses).
+
+\subsection{Baselines and ablations}
+We compare against the same DeepONet with (i) a one-hot fault encoding; (ii) a physics-residual
+loss at several weights; (iii) a self-attention branch; and (iv) a Fourier-neural-operator trunk,
+plus a pointwise multilayer perceptron (MLP) baseline mapping (scenario, time) to the angle
+directly, graph convolutional networks (GCNs) that predict the stability label or the CCT from
+raw node features (voltages, angles, loads, and a fault flag), and a gated-recurrent-unit (GRU)
+sequence-to-sequence baseline. The CCT is additionally compared against the transient-energy
+function (PEBS) method~\cite{athay1979transient} with the conductance path-integral terms of Athay
+et al., and an IMEAC-style individual-machine criterion~\cite{wang2018individual}. The DeepONet variants, MLP, and GRU share the same dataset,
+optimizer, class-balanced mean-squared loss (saturating beyond $\pm 3\pi$), and $600$-epoch
+budget; the GCNs use binary cross-entropy (or mean squared error (MSE)) and $300$ epochs on raw observables, so the
+GCN comparison measures the value of the severity encoding. A severity-MLP baseline receives
+exactly the same encoding as the operator, and the pointwise MLP and GRU are equipped with the
+same conformal calibration and CCT search, so all trajectory-level models are compared under one
+protocol; parameter counts and training budgets are in the repository.
+
+\subsection{Evaluation}
+We report the root-mean-square error (RMSE) of the predicted trajectory over stable test
+scenarios, decomposed into the fault-on ($t<t_c$) and post-fault ($t\ge t_c$) regions; the
+stability classification accuracy under the max-over-time $\pi$-separation criterion, with the
+confusion matrix and precision, recall, and $F_1$ of the stable class; the conformal band
+half-width and its empirical coverage with counts and binomial intervals; the CCT error against
+the event-aligned TDS first-crossing search; and the wall-clock speedup over the RK4 reference. ``RMSE''
+refers to the \emph{pooled} RMSE over all stable scenarios, machines, and time steps in the
+relevant region, computed in one pass; it is dominated by near-boundary scenarios and is not
+comparable to a per-scenario time-averaged mean absolute error. All main-table numbers are
+exported by a single evaluation script from one model and one dataset; four-seed statistics are
+reported separately where available.
+
+The operator is implemented in PyTorch ($2.13$, CUDA $12.6$) and trained on a single NVIDIA RTX
+4070 GPU; CPU timings use a single thread of an AMD Ryzen 7 7700. Both networks use tanh
+activations: the branch has three hidden layers of width 512 and outputs $n\times p$ basis
+coefficients with $p=512$; the trunk has three hidden layers of width 128 on top of $K=16$
+Fourier harmonics. We train with Adam (learning rate $10^{-3}$, cosine schedule, $600$ epochs,
+batch size $128$). The main results (Table~\ref{tab:main}) are for the seed-0 model under the
+max-over-time criterion; the same script also exports the confusion matrix, and across four
+training seeds the classification accuracy is \accSeed{} and the per-scenario mean RMSE is
+$20.2^\circ~\pm~1.4^\circ$, so the reported values are representative. All test metrics other than
+conformal coverage (RMSE, classification, CCT) are computed on the full $960$-scenario held-out
+set; only conformal coverage is restricted to a disjoint evaluation half
+(Section~\ref{sec:method}). The speedup is reported under two separate protocols on identical CPU hardware, with
+single-threaded implementations and median/P95 statistics.
+\emph{Throughput}: over repeated batches of $64$ scenarios the operator evaluates a $401$-point
+trajectory at \timCPU{} ms per scenario against \timRK{} ms for the RK4 reference ($0.5$ ms step,
+$4$ s horizon), a $\approx\timSU{}\times$ gap. \emph{End-to-end latency}: a single fault
+scenario, including the severity encoding (Kron reduction, $\approx0.13$ ms per bus on the 39-bus
+system) and the sequential $16$-iteration CCT binary search, takes \latEnd{} ms versus
+\latRK{} ms for the same brute-force search with TDS, a \latSU{}$\times$ gap; a $100$-point
+clearing-time sweep costs \latSweep{} ms end-to-end versus $2.3$ s for RK4. On the 118-bus system
+the encoding ($\approx4.1$ ms per fault) dominates a single scenario. The RK4 cost scales
+inversely with the reference step size, whereas the operator's cost depends only on the number of
+output time points ($401$ per trajectory), so the speedup grows for finer reference steps; all
+timing details are in the repository (\url{https://github.com/La0Fe1/operator-transient-stability}).
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Trajectory prediction and classification}
+Table~\ref{tab:main} summarizes the main results. The physics-informed operator predicts the
+fault-on segment of the trajectory to \rmseFault{}$^\circ$ pooled RMSE and the post-fault segment
+to \rmsePost{}$^\circ$ (full-horizon \rmseAll{}$^\circ$); the post-fault error is concentrated
+near the stability boundary---the sensitivity the conformal band is designed to capture---with
+$10.5^\circ$ in the first-swing window and $41.8^\circ$ in the subsequent oscillation. The
+operator classifies stability under the max-over-time $\pi$-separation criterion with \pctACC{}
+accuracy and confusion matrix (TP, FP, FN, TN) $=$ \confmat{} ($F_1$ for the stable class
+\fone{}), and attains a mean absolute CCT error of \ccterr{} ms (max $204.9$ ms on bus 12), at
+a $\approx\timSU{}\times$ throughput speedup over the RK4 reference.
+
+For reference, the transient-energy-function (PEBS) approach of Athay et
+al.~\cite{athay1979transient} with the conductance path-integral terms attains a mean CCT error
+of $18.7$ ms with a conservative bias, and an IMEAC-style individual-machine
+criterion~\cite{wang2018individual} yields $9.6$ ms. The operator's \ccterr{} ms mean absolute
+error is larger than both and carries a conservative bias
+($-21$ ms), dominated by bus 12 (reference CCT $453$ ms, estimated $248$ ms), where the criterion
+has multiple local stable-to-unstable crossings; the first-crossing search of
+Section~\ref{sec:method} reproduces the previous binary-search CCTs within $3$ ms per bus.
+Classical direct methods remain the more accurate CCT estimators; the operator's value is that it
+additionally returns the full trajectory and a conformal band without any fault-on or post-fault
+integration. Fig.~\ref{fig:trajectory} shows predicted versus true COI trajectories for a
+representative near-boundary scenario.
+
+\begin{table}[t]
+\centering
+\caption{Main results on the IEEE 39-bus system.}
+\label{tab:main}
+\begin{tabular}{lc}
+\toprule
+Metric & Value \\
+\midrule
+Stable trajectory RMSE (fault-on region) & \rmseFault{}$^\circ$ \\
+Stable trajectory RMSE (post-fault region) & \rmsePost{}$^\circ$ \\
+Stability classification accuracy (max-over-time) & \pctACC{} \\
+\;\; precision / recall / $F_1$ & $0.981$ / $0.893$ / \fone{} \\
+CCT error (mean $|$err$|$ / max) & \ccterr{} / $204.9$ ms \\
+Conformal band half-width ($\hat q$, $\alpha{=}0.1$) & \qhatdeg{}$^\circ$ \\
+Conformal empirical coverage & $0.882$ ($157/178$) \\
+Pairwise bound ($R_{\mathrm{pw}}$, $\alpha{=}0.1$) & \pairq{}$^\circ$ \\
+Speedup vs.\ RK4 (CPU, throughput) & $\approx\timSU{}\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_trajectory.pdf}
+\caption{Predicted (dashed) versus true (solid) COI rotor-angle trajectories for the two most
+affected machines in a representative near-boundary stable scenario (fault bus \trajbus{},
+$t_c=\trajtc{}$ s); the shaded band is the first-swing conformal band ($\trajband{}^\circ$ at
+$\alpha{=}0.1$). The fault-on segment ($t<t_c$, marked) is reproduced accurately, while the
+post-fault oscillation carries the bulk of the error. The first-swing window is defined by the
+\emph{true} trajectory (an offline diagnostic); the per-machine band does not certify the
+pairwise criterion.}
+\label{fig:trajectory}
+\end{figure}
+
+\subsection{Effect of the physics-informed encoding}
+Table~\ref{tab:ablation} reports the ablation on the fault encoding. Replacing the
+physics-informed acceleration vector with a one-hot bus index degrades the stable-trajectory
+RMSE from \rmseAll{}$^\circ$ to $141.4^\circ$ and the classification accuracy from \pctACC{} to
+$88.0\%$, because a one-hot encoding provides no signal for unseen fault buses; the one-hot
+baseline also overfits at $p{=}512$---its RMSE exceeds the \randRMSE{}$^\circ$ attained by a
+uniformly random predictor in $[-180^\circ,180^\circ]$ on the same stable test trajectories, an
+actual baseline computed on the test set---and reducing its capacity does not recover meaningful
+generalization. The physics-informed encoding is therefore the mechanism enabling generalization
+across fault locations.
+
+A GCN classifier operating on raw node features (voltage magnitudes and angles, loads, and a
+fault flag) achieves only $76.0\%$ accuracy versus \pctACC{} for the severity-encoded operator;
+a stronger graph baseline with three residual layers attains
+$77.3\%\pm3.9\%$ (five seeds), so the gap is not an artifact of a weak architecture, and a
+GCN regressing the CCT from the same raw features attains a mean CCT error of $48.0$ ms (max
+$224.4$ ms) versus \ccterr{} ms (max $204.9$ ms). These comparisons are not
+architecture-controlled, but
+they show the severity encoding carries more information than raw observables. Note that the
+pointwise MLP's higher classification accuracy does not carry over to trajectory quality
+($43.1^\circ$ versus \rmseAll{}$^\circ$ pooled RMSE, without continuous-time evaluation;
+Table~\ref{tab:ablation}). A \emph{severity-MLP}
+receiving exactly the same encoding attains \sevMLPacc{} accuracy and \sevMLPcct{} ms mean CCT
+error (Table~\ref{tab:ablation}): the encoding, not the DeepONet architecture, is the dominant
+factor for generalization to unseen fault locations. A recurrent (GRU) sequence-to-sequence
+baseline mapping the same encoding through a sequential decoder attains $57.3^\circ$ RMSE and
+$93.9\%$ accuracy, worse than the operator's \rmseAll{}$^\circ$: the low-rank structure
+outperforms a generic recurrent decoder.
+
+\begin{table}[t]
+\centering
+\caption{Comparison of variants and baselines on the IEEE 39-bus system ($12$ held-out fault
+buses, seed 0). RMSE is the pooled stable-trajectory RMSE; ``$-$'' marks a metric the variant does
+not produce. The pointwise MLP and GRU are evaluated under the same criterion, conformal
+calibration, and CCT search as the operator.}
+\label{tab:ablation}
+\begin{tabular}{lccc}
+\toprule
+Variant & RMSE & Acc. & CCT err. \\
+\midrule
+DeepONet, physics encoding (proposed) & \rmseAll{}$^\circ$ & \pctACC{} & \ccterr{} ms \\
+DeepONet, one-hot encoding & $141.4^\circ$ & $88.0\%$ & $-$ \\
+DeepONet $+$ physics-residual loss ($\lambda{=}0.001$) & $39.2^\circ$ & $95.6\%$ & $-$ \\
+DeepONet $+$ physics-residual loss ($\lambda{=}0.01$) & $76.5^\circ$ & $89.9\%$ & $-$ \\
+Pointwise MLP baseline & $43.1^\circ$ & $96.9\%$ & \mlpcct{} ms \\
+GRU sequence baseline & $57.3^\circ$ & $93.9\%$ & \grucct{} ms \\
+Severity-MLP classifier (same encoding) & $-$ & \sevMLPacc{} & $-$ \\
+Severity-MLP CCT regressor (same encoding) & $-$ & $-$ & \sevMLPcct{} ms \\
+GCN classifier (raw features) & $-$ & $76.0\%$ & $-$ \\
+GCN CCT regressor (raw features) & $-$ & $-$ & $48.0$ ms \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Generalization to $N{-}1$ and $N{-}2$ topologies}
+We train the multi-topology operator ($p{=}512$) with the extended encoding of
+Section~\ref{sec:method}. The $N{-}1$ experiment trains on $9990$ $N{-}0$/$N{-}1$ scenarios
+(line trips drawn from $25$ training lines) and evaluates on two held-out axes: unseen fault
+buses and $10$ unseen trip lines. The $N{-}2$ experiment trains on $8748$ scenarios that
+additionally include $N{-}2$ line-pair scenarios drawn from the training lines, and evaluates on
+held-out line pairs. On held-out line trips the operator
+achieves $33.6^\circ$ stable-trajectory RMSE and $95.9\%$ accuracy, demonstrating that the
+post-fault severity encoding lets the operator generalize to topologies never seen in training;
+on held-out fault buses the RMSE is $64.3^\circ$ and the accuracy $93.5\%$ (Table~\ref{tab:n1}),
+reflecting the harder combined task. The same encoding and architecture apply to $N{-}2$ contingencies (two lines tripped)
+without modification: on held-out line pairs the operator attains $43.4^\circ$ RMSE and $92.9\%$
+accuracy, because the post-fault severity vector is simply evaluated from the admittance matrix
+with both lines removed. The multi-topology operator also estimates the CCT on held-out
+combinations: $19.4$ ms mean absolute error on unseen trip lines, $31.9$ ms on held-out fault
+buses, and \cctNtwo{} ms on held-out $N{-}2$ line pairs (sampled); split-conformal coverage on
+these splits is reported in Section~\ref{sec:results}.
+
+\begin{table}[t]
+\centering
+\caption{Generalization of the multi-topology operator (training mixes include $N{-}0$/$N{-}1$/$N{-}2$): pooled
+stable-trajectory RMSE, classification accuracy, and CCT error (mean over held-out
+bus--line combinations).}
+\label{tab:n1}
+\begin{tabular}{lccc}
+\toprule
+Held-out split & RMSE & Acc. & CCT err. \\
+\midrule
+Trip lines ($N{-}1$, unseen) & $33.6^\circ$ & $95.9\%$ & $19.4$ ms \\
+Fault buses (mixed $N$-0/$N$-1) & $64.3^\circ$ & $93.5\%$ & $31.9$ ms \\
+Line pairs ($N{-}2$, unseen) & $43.4^\circ$ & $92.9\%$ & \cctNtwo{} ms \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Sample efficiency of the operator}
+\label{sec:sampleeff}
+A motivation for the operator architecture is its low-rank inductive bias. Training the DeepONet
+and the pointwise MLP baseline on $10\%$, $25\%$, $50\%$, and $100\%$ of the training scenarios
+(three seeds each), the operator attains $56.1^\circ$ RMSE versus $65.2^\circ$ for the MLP at
+$10\%$ of the data (a $\approx9^\circ$ advantage), $\approx8^\circ$ at $25\%$, and
+$\approx2$--$3^\circ$ at $50\%$/$100\%$. The low-rank structure therefore confers a modest
+sample-efficiency advantage in the low-data regime; with three seeds per fraction and a
+$14.0^\circ$ across-seed spread at $10\%$ data, the advantage is indicative rather than
+statistically established. 
+
+\subsection{Extensions to higher-fidelity generator models and damping}
+To verify that the approach carries over to more realistic generator representations, we retrain
+the operator---architecture, encoding, and protocol unchanged, with the same $12$ held-out fault
+buses---on data from higher-fidelity simulators, so only the ground-truth trajectories change.
+On the one-axis (flux-decay) model (a third-order per-machine model~\cite{sauer1998dynamics},
+Ch.~8) the retrained operator attains $38.6^\circ$ pooled stable-trajectory RMSE ($1.8^\circ$
+fault-on, $39.2^\circ$ post-fault), $94.0\%$ classification accuracy, a mean CCT error of
+$23.3$ ms, and a conformal band of $121.3^\circ$ half-width with $0.903$ coverage
+($\alpha{=}0.1$). Adding a first-order automatic voltage regulator (a simplified IEEE DC1A
+exciter with $K_A{=}20$, $T_A{=}0.2$ s and rate limits) yields a fourth-order model on which the
+operator attains $25.4^\circ$ pooled RMSE ($2.2^\circ$ fault-on, $25.5^\circ$ post-fault),
+$94.0\%$ accuracy, and conformal coverage $0.896$ with half-width $127.7^\circ$---the lowest
+absolute RMSE of the three generator models, largely because voltage regulation smooths the
+post-fault oscillation.
+
+Adding uniform damping $D{=}1$ leaves the encoding unchanged (the damping term vanishes at
+the pre-fault equilibrium), so the same architecture is retrained on damped data. The fault-on region improves to $1.8^\circ$ pooled RMSE, but the post-fault RMSE
+rises to $46.4^\circ$ (versus \rmsePost{}$^\circ$ undamped) and classification drops to $93.4\%$
+(CCT error $30.8$ ms): near-boundary damped trajectories decay slowly, so small errors in the
+predicted decay rate accumulate over the $4$ s window (maximum worst-case error $638^\circ$). The
+split-conformal band remains approximately valid (mean coverage $0.90\pm0.02$ over five
+calibration splits); damping does not simplify the near-boundary prediction task.
+
+\subsection{Conformal bands}
+The split-conformal band achieves empirical coverage close to nominal at every level on the
+$N_{\mathrm{eva}}{=}178$ evaluation scenarios: $91.6\%$ ($163/178$) at the $95\%$ target,
+$88.2\%$ ($157/178$, CI $83$--$93\%$) at $90\%$, $67.4\%$ ($120/178$) at $70\%$, and $43.8\%$
+($78/178$) at $50\%$ (Fig.~\ref{fig:conformal}); the same calibration on the multi-topology
+operators yields coverage of $0.915$ on both held-out $N{-}1$ splits and $0.872$/$0.852$ on
+$N{-}2$ buses and line pairs (half-widths $121$--$181^\circ$). A Mondrian (grouped)
+calibration~\cite{vovk2005algorithmic} by the post-fault peak of the pairwise
+spread---$\max_{t\ge t_c}\bigl(\max_i \tilde\delta_i(t)-\min_i \tilde\delta_i(t)\bigr)$ of the
+\emph{true} trajectory, an offline diagnostic because the grouping uses ground-truth labels---shows,
+at $\alpha{=}0.1$, that the half-width grows toward the stability boundary, from
+\mondA{}$^\circ$ for scenarios peaking below $45^\circ$ (group $48/51$ calibration/evaluation,
+coverage $0.863$), through $94.2^\circ$ for $45$--$90^\circ$ ($44/52$, $0.923$), to
+\mondC{}$^\circ$ above $90^\circ$ ($86/75$, $0.800$): coverage is approximately nominal away from
+the boundary and below nominal near it. The band is wide precisely where the stability decision
+is most critical; it is a conservative screening envelope, not a tight predictive interval.
+
+The directly calibrated pairwise-difference score $R_{\mathrm{pw}}$ bounds the prediction error of the pairwise angle
+difference---the exact quantity in the stability criterion---to \pairq{}$^\circ$ at
+$\alpha{=}0.1$ (coverage \paircov{}), below the $\pi$ threshold. Making a decision from this
+bound still requires the \emph{predicted} spread to satisfy
+$\mathrm{spread} + \hat q_{\mathrm{pw}} < \pi$; on the evaluation half this rule resolves
+\decfrac{} of the predicted-stable scenarios at $\alpha{=}0.1$ (rising to $31\%$ at
+$\alpha{=}0.3$, $57\%$ at $\alpha{=}0.4$, and $67\%$ at $\alpha{=}0.5$ as $\hat q_{\mathrm{pw}}$
+tightens), and the empirical wrong-release rate of the predicted-stable gate is \wrrate{}
+($\wrnum{}$ of \wrdem{}), so any deployment must retain a TDS fallback for the unresolved
+fraction. Per-machine calibration with Bonferroni/\v{S}id\'ak corrections does not tighten the
+bound, and calibrating on the validation set instead of held-out scenarios
+yields only $0.61$ coverage at the nominal $0.90$ target: the held-out-bus distribution is
+genuinely harder, so calibrating on held-out scenarios is necessary rather than a leakage
+concern. The calibration does not transfer across operating points (the $N{-}0$-calibrated interval covers only $0.51$ of
+stable $0.8$-load scenarios and $0.72$ at $0.9$ load), consistent with the operating-point
+limitation of Section~\ref{sec:discussion}. In the gated regime (evaluated on the disjoint half): gate purity \gatepurity{}, coverage
+over predicted-stable scenarios \gatecovAll{}, and oracle-conditioned coverage \gatecovTS{}
+(\gatenum{} scenarios; the last conditions on ground-truth labels and is not a deployment
+guarantee, since conditioning on the prediction breaks exchangeability). Alternative scores (amplitude-normalized, first-swing, time-averaged; see the
+repository), adaptive conformal
+methods~\cite{gibbs2021adaptive, lei2014distribution}, and conformalized quantile
+regression~\cite{romano2019conformalized} are candidates for reducing near-boundary conservatism.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_conformal.pdf}
+\caption{Conformal band validity and adaptivity. Left: empirical coverage (with binomial
+intervals) against the target coverage level $1-\alpha$. Right: offline Mondrian diagnostic---the grouping
+uses the ground-truth post-fault peak of each scenario---shows the band half-width growing toward
+the stability boundary; bars are annotated with group size (calibration/evaluation) and per-group
+coverage.}
+\label{fig:conformal}
+\end{figure}
+
+\subsection{The negative result: input encoding versus residual loss}
+The auxiliary physics-residual loss does not help in this setting: with the correctly scaled
+residual of \eqref{eq:physloss}, the pooled stable-trajectory RMSE is $39.2^\circ$ at
+$\lambda{=}0.001$ (versus \rmseAll{}$^\circ$ for the data-only operator) and $76.5^\circ$ at
+$\lambda{=}0.01$ (Table~\ref{tab:ablation})---no improvement at the mildest weight and harmful at
+larger weights---and denser collocation does not help either ($48.9^\circ$ pooled, $92.9\%$
+accuracy). Without the correct post-fault initial condition the swing-equation residual is a weak
+constraint satisfied by many trajectories, so it adds regularization without information. This conclusion is scoped to the present system, protocol, weights, and architecture.
+
+\subsection{Near-boundary sensitivity and architecture ablations}
+Training on boundary-aware data (clearing times sampled within $[0.4,1.2]\times$CCT per fault
+bus) raises the pooled post-fault RMSE from \rmsePost{}$^\circ$ (uniform) to $70.8^\circ$
+(boundary-aware): near-boundary trajectories respond sharply to small parameter changes at the
+stability bifurcation, the regime the conformal band is designed to flag (the rise can reflect
+both intrinsic difficulty and the shifted sampling; we report the observation without attributing
+a single cause). Stratifying the test scenarios by their distance to the TDS CCT quantifies this:
+more than $100$ ms inside the boundary the misclassification rate is $8.8\%$; within $30$ ms it
+rises to $20.0\%$ ($n{=}60$); and within $10$ ms it reaches $46.2\%$ ($n{=}13$, descriptive). The
+sharpest decisions are the least reliable. Replacing the branch network with self-attention does
+not improve accuracy ($116.1^\circ$ RMSE, $92.8\%$ accuracy at $p{=}512$, versus
+\rmseAll{}$^\circ$ and \pctACC{}), consistent with the severity encoding already capturing the
+machine-interaction structure, and a Fourier-neural-operator trunk likewise gives no improvement
+($47.4^\circ$ RMSE, $92.6\%$ accuracy). This supports the choice of a
+simple DeepONet with a physics-informed encoding.
+
+\subsection{Robustness to measurement noise}
+The encoding $a_i(k)=(P_{mi}-P_{ei}^{\mathrm{f}})/M_i$ is itself computed from estimates of
+mechanical power, inertia, and fault-on electrical power, which carry measurement error.
+Perturbing the encoded acceleration vector with zero-mean Gaussian noise, the pooled stable RMSE
+rises from \rmseAll{}$^\circ$ to $115.4^\circ$ and accuracy drops from \pctACC{} to $89.1\%$ at
+$5\%$ noise ($152.3^\circ$/$82.9\%$ at $10\%$, $213.6^\circ$/$73.0\%$ at $20\%$). The operator is therefore only moderately robust to
+\emph{feature} noise; correlated or biased parameter errors and conformal coverage under noise
+remain to be tested.
+
+\subsection{Scalability to the IEEE 118-bus system}
+To probe scalability beyond a single test system, we evaluate the operator on a custom dynamic
+test case built on the IEEE 118-bus static network: the $54$ machine parameters ($H$, $x'_{d}$)
+are taken from the grouped tables of Demetriou et al.~\cite{demetriou2017dynamic} and assigned to
+pandapower's case118 generators by rated capacity. No per-machine bus mapping and no per-unit
+base conversion are applied ($H$ and $x'_{d}$ are interpreted directly on the system MVA base,
+a self-consistent convention); this is a synthetic dynamic case on the IEEE 118-bus network
+rather than a reproduction of the Demetriou system; results probe scalability of the
+\emph{method}, not of any benchmark. With $24$ fault buses held out entirely from training
+($3760$ training and $960$ test scenarios), the retrained operator attains \pctACCb{}
+classification accuracy and $121.9^\circ$ stable-trajectory RMSE. The test set is $25.4\%$
+stable, so a majority-class baseline would score $74.6\%$; \pctACCb{} therefore reflects real
+discrimination, close to the 39-bus \pctACC{} despite $5.4\times$ more generators and $3.0\times$
+more buses. The higher trajectory RMSE reflects the larger state space and the much lower CCTs of
+the assigned 118-bus case ($0.008$--$0.135$ s), with a CCT error of $13.3$ ms mean absolute (max
+$54.7$ ms) on the $24$ held-out buses. The split-conformal interval attains $0.918$ coverage at
+$\alpha{=}0.1$ with a half-width of $596.4^\circ$---larger than the $180^\circ$ stability
+threshold, so on the 118-bus case the interval validates the coverage mechanism but is vacuous
+for decisions; the pairwise score and richer calibration data
+are required before the bound is operationally useful at this scale.
+
+\section{Discussion and Limitations}
+\label{sec:discussion}
+First, the post-fault trajectory accuracy (\rmsePost{}$^\circ$ pooled RMSE) is limited and
+concentrated near the stability boundary, where the classical model response to small parameter
+changes is sharpest. Second, the conformal band is calibrated on stable scenarios and covers the
+finite output grid: it is a screening band for the stable subpopulation, not a stability
+certificate; near-boundary and unstable scenarios are conveyed through the classification, the
+wrong-release statistics of Section~\ref{sec:results}, and the heuristic CCT band rather than a
+numeric trajectory bound, and on the 118-bus case the per-machine band is currently vacuous. The $\pi$-in-$4$ s criterion is the operational label of this study; whether the first
+swing governs multi-swing instability in every scenario of richer models was not established
+here. Third, governors, power-system stabilizers, and dynamic loads are not modeled; the one-axis,
+exciter, and damped extensions retrain the same architecture and encoding rather than
+transferring weights, although the encoding itself needs no modification. Fourth, the pointwise
+MLP baseline is slightly worse than the operator on trajectory RMSE at full data
+($43.1^\circ$ versus \rmseAll{}$^\circ$ pooled), and the low-data advantage is indicative rather
+than established (Section~\ref{sec:sampleeff}); under the \emph{same} conformal and CCT protocol
+the MLP is not worse, so the operator's remaining advantages are the lower trajectory RMSE,
+continuous-time evaluation, and the low-rank structure, and certification tightness is not one of
+them. Fifth, the operator is trained at a fixed operating point and does not generalize to
+substantially different load levels: classification accuracy drops to $75\%$ at $20\%$ lower
+load, and training across multiple load levels does not resolve this (a model trained on four
+load levels attains only $65\%$ on a held-out level). Deployment is therefore a screening tool
+\emph{within} its calibrated operating domain; detecting and rejecting out-of-domain operating
+points (e.g., via the encoding norm or an OOD detector) is left as required future work, and
+operating-point generalization remains the binding obstacle to broader deployment. Sixth, only bolted three-phase faults are
+modeled; parametric fault impedance and line-corridor faults are left to future work.
+
+\section{Conclusion}
+We presented a physics-encoded neural operator for transient stability assessment that predicts
+the full post-fault rotor-angle trajectory and the critical clearing time, with a split-conformal
+layer providing a finite-sample, distribution-free trajectory band for the stable subpopulation
+on the output grid. The key enabler is a physics-informed input encoding---the swing-equation
+acceleration vector, extended by a post-fault severity vector---which lets the operator generalize
+to unseen fault locations and to held-out $N{-}1$/$N{-}2$ line-trip topologies. On the IEEE 39-bus
+system the operator runs $\approx\timSU{}\times$ faster than time-domain simulation on identical
+hardware, classifies stability with \pctACC{} accuracy under the max-over-time $\pi$-separation
+criterion, and attains a mean absolute CCT error of \ccterr{} ms against an event-aligned reference; the
+directly calibrated pairwise-error bound (\pairq{}$^\circ$ at $\alpha{=}0.1$) is coverage-valid, with a
+wrong-release rate and resolvable fraction reported in Section~\ref{sec:results} and a TDS
+fallback for the remainder. A negative result shows that, for this system and protocol, the
+physics-informed input encoding is more effective than a physics-residual loss, and the encoding
+carries over unchanged to one-axis, exciter, and damped generator models and to a synthetic
+118-bus dynamic case (\pctACCb{} accuracy), where trajectory-level bands remain vacuous for
+decisions. Together with the operating-point limitation, these results define a fast,
+uncertainty-aware screening tool for TSA within its calibrated domain, and a concrete
+agenda---out-of-domain detection, multi-swing and multi-operating-point calibration, and tighter
+near-boundary scores---for its deployment.
+
+\section*{Acknowledgments}
+During the preparation of this work the authors used [TOOL NAME---e.g., Claude (Anthropic)] to
+polish the language and improve the readability of the manuscript. After using this tool, the
+authors reviewed and edited the content as needed and take full responsibility for the content
+of the publication.
+
+\section*{Declarations}
+\noindent\textbf{Funding.} The authors declare no specific funding for this work.\\
+\textbf{Conflict of interest.} The authors declare no competing interests.\\
+\textbf{Data availability.} The code reproducing all experiments---scenario generation,
+model training for all variants, conformal calibration, CCT binary search, and the sources for
+Figures~1--3 and Tables~I--III---is available at
+\url{https://github.com/La0Fe1/operator-transient-stability}, together with the random seeds,
+software versions, and environment file.\\
+\textbf{CRediT authorship contribution statement.} Zhenyu Liu: Conceptualization, Methodology,
+Software, Validation, Formal analysis, Investigation, Writing -- original draft, Writing --
+review \& editing. Jiale Wang: Validation, Writing -- review \& editing. Jiayong Liu: Validation,
+Writing -- review \& editing. Zhicheng Zeng: Validation, Writing -- review \& editing.
+
+\bibliographystyle{elsarticle-num}
+\bibliography{references}
+
+\section*{Author biographies}
+\noindent\textbf{Zhenyu Liu} is pursuing the B.Eng. degree at the International Energy College,
+Jinan University, Guangzhou, China. His research interests include power system stability and
+machine learning.\\
+\textbf{Jiale Wang} is pursuing the B.Eng. degree at the International Energy College, Jinan
+University, Guangzhou, China. His research interests include power system simulation and
+artificial intelligence.\\
+\textbf{Jiayong Liu} is pursuing the B.Eng. degree at the International Energy College, Jinan
+University, Guangzhou, China. His research interests include power system dynamics and
+data-driven methods.\\
+\textbf{Zhicheng Zeng} is pursuing the B.Eng. degree at the International Energy College, Jinan
+University, Guangzhou, China. His research interests include power system analysis.
+
+\end{document}

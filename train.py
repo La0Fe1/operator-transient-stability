@@ -143,7 +143,7 @@ def main():
     err = np.abs(pred_test - yt)
     rmse_all = np.sqrt((err ** 2).mean(axis=(1, 2)))
     rmse_stable = np.sqrt((err[stable_mask] ** 2).mean(axis=(1, 2)))
-    final_spread = pred_test[:, :, -1].max(1) - pred_test[:, :, -1].min(1)
+    final_spread = (pred_test.max(axis=1) - pred_test.min(axis=1)).max(axis=1)
     acc = ((final_spread < np.pi) == stable_mask).mean()
     print(f"\nTEST  rmse_all={np.rad2deg(rmse_all.mean()):.2f} deg | "
           f"stable_rmse={np.rad2deg(rmse_stable.mean()):.3f} deg (n={stable_mask.sum()}) | "

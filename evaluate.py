@@ -83,8 +83,8 @@ def main(path="model_dataonly.pt", alpha=0.1, p=128, datafile="data39.npz", damp
         fault_on_err.append(np.rad2deg(err[i][:, mask].mean()))
         post_fault_err.append(np.rad2deg(err[i][:, ~mask].mean()))
 
-    # ---- 2. stability classification ----
-    final_spread = pred[:, :, -1].max(1) - pred[:, :, -1].min(1)
+    # ---- 2. stability classification (max-over-time spread, same as labels) ----
+    final_spread = (pred.max(axis=1) - pred.min(axis=1)).max(axis=1)
     pred_stable = final_spread < np.pi
     acc = (pred_stable == st).mean()
     tp = (pred_stable & st).sum(); fp = (pred_stable & ~st).sum()
@@ -96,7 +96,9 @@ def main(path="model_dataonly.pt", alpha=0.1, p=128, datafile="data39.npz", damp
     rng = np.random.default_rng(0)
     idx = rng.permutation(len(scores))
     n_cal = len(scores) // 2
-    q = np.quantile(scores[idx[:n_cal]], min(1.0, (1 - alpha) * (1 + 1.0 / n_cal)))
+    # A4: finite-sample split-conformal quantile (order statistic)
+    k = int(np.ceil((n_cal + 1) * (1 - alpha)))
+    q = np.sort(scores[idx[:n_cal]])[k - 1] if k <= n_cal else np.inf
     coverage = (scores[idx[n_cal:]] <= q).mean()
     q_loo = np.full_like(scores, q)
 
@@ -107,14 +109,15 @@ def main(path="model_dataonly.pt", alpha=0.1, p=128, datafile="data39.npz", damp
         lo, hi = 0.01, 0.8
         for _ in range(16):
             mid = (lo + hi) / 2
-            r = simulate_batch(model_cct, np.array([bus]), np.array([mid]), np.array([-1]), 4.0)
+            r = simulate_batch(model_cct, np.array([bus]), np.array([mid]), np.array([-1]), 4.0,
+                               dt=0.0005)   # event-aligned reference step (B6)
             lo, hi = (mid, hi) if r["stable"][0] else (lo, mid)
         return lo
 
     def pred_cct(bus):
         def stable(tc):
             tr = predict(model, severity_enc(np.array([bus]), np.array([tc]), d, dev), t, dev)[0]
-            return (tr[:, -1].max() - tr[:, -1].min()) < np.pi
+            return (tr.max(axis=0) - tr.min(axis=0)).max() < np.pi
         lo, hi = 0.01, 0.8
         for _ in range(16):
             mid = (lo + hi) / 2

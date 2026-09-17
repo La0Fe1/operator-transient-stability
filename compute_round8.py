@@ -28,7 +28,7 @@ def main():
     fb, tc, y, st = d["fb_test"], d["tc_test"], d["y_test"], d["s_test"].astype(bool)
     with torch.no_grad():
         pred = m(severity_enc(fb, tc, d, dev), t).cpu().numpy()
-    pred_stable = (pred[:, :, -1].max(1) - pred[:, :, -1].min(1)) < np.pi
+    pred_stable = (pred.max(axis=1) - pred.min(axis=1)).max(axis=1) < np.pi   # A2
     gate_purity = st[pred_stable].mean()
     print(f"(1) gate: predicted-stable={pred_stable.sum()}/960, "
           f"purity (P(true stable | predicted stable))={gate_purity:.3f}", flush=True)
@@ -38,12 +38,21 @@ def main():
     scores = err[st].max(axis=(1, 2))
     rng = np.random.default_rng(0)
     idx = rng.permutation(len(scores)); nc = len(scores) // 2
-    q = np.quantile(scores[idx[:nc]], min(1.0, 0.9 * (1 + 1.0 / nc)))
-    in_gate = st & pred_stable                     # truly stable AND predicted stable
-    scores_gate = err[in_gate].max(axis=(1, 2))
-    cov_gate = (scores_gate <= q).mean()
-    print(f"(1) coverage within gate: n={in_gate.sum()}, q={np.rad2deg(q):.1f} deg, "
-          f"coverage={cov_gate:.3f}", flush=True)
+    k = int(np.ceil((nc + 1) * 0.9))               # A4: order-statistic quantile
+    q = np.sort(scores[idx[:nc]])[k - 1] if k <= nc else np.inf
+    # A3: gated coverage on the DISJOINT EVALUATION HALF only
+    eva = idx[nc:]
+    st_e, ps_e = st[eva], pred_stable[eva]
+    gate = ps_e
+    purity = st_e[gate].mean() if gate.sum() else np.nan
+    wr = (~st_e & gate).sum() / (~st_e).sum() if (~st_e).sum() else np.nan
+    cov_all_ps = (err[eva][gate].max(axis=(1, 2)) <= q).mean() if gate.sum() else np.nan
+    in_gate = st_e & gate                        # oracle-conditioned diagnostic
+    cov_ts_ps = (err[eva][in_gate].max(axis=(1, 2)) <= q).mean() if in_gate.sum() else np.nan
+    print(f"(1) gate (eval half, n={len(eva)}): purity={purity:.3f}, "
+          f"wrong-release={wr:.3f}, cov(pred-stable)={cov_all_ps:.3f} (n={int(gate.sum())}), "
+          f"cov(true-stable&pred-stable, oracle)={cov_ts_ps:.3f} (n={int(in_gate.sum())}), "
+          f"q={np.rad2deg(q):.1f} deg", flush=True)
 
     # ---------- (2) N-2 CCT error ----------
     dn = np.load("data39_n2.npz")

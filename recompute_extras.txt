@@ -1,0 +1,11 @@
+clean: acc=0.9542
+noise 5%: acc=0.8906  pooled RMSE=115.4 deg
+noise 10%: acc=0.8292  pooled RMSE=152.3 deg
+noise 20%: acc=0.7302  pooled RMSE=213.6 deg
+dist>100 ms: stable RMSE=19.9 deg, misclass=0.088; 0<dist<=100 ms: misclass=0.126 (n=175)
+dist>30 ms: stable RMSE=23.8 deg, misclass=0.088; 0<dist<=30 ms: misclass=0.200 (n=60)
+dist>10 ms: stable RMSE=34.0 deg, misclass=0.093; 0<dist<=10 ms: misclass=0.462 (n=13)
+Bonferroni: pairwise=734.2 deg, joint cov=0.978; Sidak pairwise=734.2 deg
+relative score: band=2.9% of amplitude, cov=0.904
+first-swing score: q=96.8 deg, cov=0.933
+time-averaged score: q=48.3 deg, cov=0.927

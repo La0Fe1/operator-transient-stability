@@ -64,32 +64,43 @@ def simulate_batch(
     delta_out = np.zeros((B, n, n_out))
     stable = np.ones(B, dtype=bool)
 
-    step_per_out = max(1, int(round(out_dt / dt)))
-    k = 0
-    k_out = 0
-    t_cur = 0.0
+    # integrate with fixed dt, splitting each step at the clearing instant t_c so
+    # that the fault-on network is used exactly until t_c (event alignment); the
+    # state is linearly interpolated onto the exact output grid
+    delta_out[:, :, 0] = delta - (M * delta).sum(axis=1, keepdims=True) / Mtot
+    t_cur = np.zeros(B)
+    prev_delta = np.zeros_like(delta)
+    prev_omega = np.zeros_like(omega)
+    prev_t = np.zeros(B)
 
-    # integrate with fixed dt
-    while t_cur < t_end + dt / 2:
-        if k % step_per_out == 0 and k_out < n_out:
-            coi = delta - (M * delta).sum(axis=1, keepdims=True) / Mtot
-            delta_out[:, :, k_out] = coi
-            # stability: pairwise angle spread < pi over the window so far
-            spread = coi.max(axis=1) - coi.min(axis=1)
-            stable &= (spread < np.pi)
-            k_out += 1
-        if t_cur >= t_end:
-            break
-        mask = (t_cur < t_clears)                # (B,)
-        Ynow = np.where(mask[:, None, None], Yf, Yp)
-        d1, w1 = _deriv(delta, omega, Ynow)
-        d2, w2 = _deriv(delta + 0.5 * dt * d1, omega + 0.5 * dt * w1, Ynow)
-        d3, w3 = _deriv(delta + 0.5 * dt * d2, omega + 0.5 * dt * w2, Ynow)
-        d4, w4 = _deriv(delta + dt * d3, omega + dt * w3, Ynow)
-        delta = delta + (dt / 6.0) * (d1 + 2 * d2 + 2 * d3 + d4)
-        omega = omega + (dt / 6.0) * (w1 + 2 * w2 + 2 * w3 + w4)
-        t_cur += dt
-        k += 1
+    for k_out in range(1, n_out):
+        target = out_t[k_out]
+        while (t_cur < target - 1e-15).any():
+            step_mask = t_cur < target - 1e-15
+            prev_delta[step_mask] = delta[step_mask]
+            prev_omega[step_mask] = omega[step_mask]
+            prev_t[step_mask] = t_cur[step_mask]
+            fault_on = step_mask & (t_cur < t_clears)              # (B,)
+            h = np.where(fault_on, np.minimum(dt, t_clears - t_cur), dt)
+            Ynow = np.where(fault_on[:, None, None], Yf, Yp)
+            d1, w1 = _deriv(delta, omega, Ynow)
+            d2, w2 = _deriv(delta + 0.5 * h[:, None] * d1,
+                            omega + 0.5 * h[:, None] * w1, Ynow)
+            d3, w3 = _deriv(delta + 0.5 * h[:, None] * d2,
+                            omega + 0.5 * h[:, None] * w2, Ynow)
+            d4, w4 = _deriv(delta + h[:, None] * d3,
+                            omega + h[:, None] * w3, Ynow)
+            delta[step_mask] += (h[step_mask, None] / 6.0) * (d1 + 2 * d2 + 2 * d3 + d4)[step_mask]
+            omega[step_mask] += (h[step_mask, None] / 6.0) * (w1 + 2 * w2 + 2 * w3 + w4)[step_mask]
+            t_cur[step_mask] += h[step_mask]
+        # interpolate each scenario to the exact output time
+        hw = t_cur - prev_t
+        alpha = np.where(hw > 0, (target - prev_t) / hw, 0.0)[:, None]
+        coi = (prev_delta + alpha * (delta - prev_delta))
+        coi = coi - (M * coi).sum(axis=1, keepdims=True) / Mtot
+        delta_out[:, :, k_out] = coi
+        spread = coi.max(axis=1) - coi.min(axis=1)
+        stable &= (spread < np.pi)
 
     return {"t": out_t, "delta_coi": delta_out, "stable": stable}
 

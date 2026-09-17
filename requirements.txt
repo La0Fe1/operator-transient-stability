@@ -1,5 +1,7 @@
-numpy
-pandas
-pandapower
-torch
-matplotlib
+# Environment used for the reported results (paper revision 2026-09-16).
+# Python 3.12, Windows 10, NVIDIA RTX 4070, CUDA 12.6.
+numpy==2.4.4
+pandas==2.3.3
+pandapower==3.5.4
+torch==2.13.0
+matplotlib==3.11.1
