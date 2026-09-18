@@ -382,8 +382,9 @@ covered simultaneously on the output grid: $\Pr\{ \max_{i,t\in\mathcal{T}_{\math
 every single-machine COI angle at every \emph{output-grid} point lies within $\hat q$ of the
 truth. Three limits are
 explicit: the guarantee is marginal over the stable subpopulation (it does not cover misclassified
-unstable scenarios); it applies to the finite output grid (a denser-grid check found no missed
-criterion crossings, Section~\ref{sec:results}); and it is a calibrated trajectory band, not a
+unstable scenarios); it applies to the finite output grid ([Rev. R2] a $2$ ms dense-grid check on $200$ held-out
+scenarios found no missed criterion crossings, i.e., no label flips relative to the $10$ ms
+output grid); and it is a calibrated trajectory band, not a
 stability certificate. By the triangle inequality, the pairwise angle difference relevant to the
 stability criterion is bounded by $2\hat q$, which at $\alpha{=}0.1$ exceeds the $\pi$ threshold.
 
@@ -467,7 +468,12 @@ half-width and its empirical coverage with counts and binomial intervals; the CC
 the event-aligned TDS first-crossing search; and the wall-clock speedup over the RK4 reference. ``RMSE''
 refers to the \emph{pooled} RMSE over all stable scenarios, machines, and time steps in the
 relevant region, computed in one pass; it is dominated by near-boundary scenarios and is not
-comparable to a per-scenario time-averaged mean absolute error. All main-table numbers are
+comparable to a per-scenario time-averaged mean absolute error. [Rev. R9] The results are not artifacts of the hyperparameters: halving the Fourier harmonics
+to $K{=}8$ degrades the pooled RMSE to $45.9^\circ$ ($94.3\%$ accuracy), and reducing the loss
+saturation to $\pm2\pi$ yields $94.7\%$ accuracy with a slightly better pooled RMSE of
+$34.3^\circ$; we retain $\pm3\pi$ because it is selected on validation data and gives more
+stable fits to diverging unstable trajectories. The basis dimension $p$ is ablated in
+Table~\ref{tab:ablation} and Section~\ref{sec:sampleeff}. All main-table numbers are
 exported by a single evaluation script from one model and one dataset; four-seed statistics are
 reported separately where available.
 
@@ -491,7 +497,11 @@ scenario, including the severity encoding (Kron reduction, $\approx0.13$ ms per 
 system) and the sequential $16$-iteration CCT binary search, takes \latEnd{} ms versus
 \latRK{} ms for the same brute-force search with TDS, a \latSU{}$\times$ gap; a $100$-point
 clearing-time sweep costs \latSweep{} ms end-to-end versus $2.3$ s for RK4. On the 118-bus system
-the encoding ($\approx4.1$ ms per fault) dominates a single scenario. The RK4 cost scales
+the encoding ($\approx4.1$ ms per fault) dominates a single scenario. [Rev. R11] The encoding is
+a Kron reduction whose measured cost is $0.13$ ms per fault on the 39-bus system and $4.1$ ms on
+the 118-bus system---still a small fraction of one TDS run, but it grows with network size---and
+the operator forward pass is linear in the number of output grid points and in the number of
+machines (the branch input dimension is $n+1$). The RK4 cost scales
 inversely with the reference step size, whereas the operator's cost depends only on the number of
 output time points ($401$ per trajectory), so the speedup grows for finer reference steps; all
 timing details are in the repository (\url{https://github.com/La0Fe1/operator-transient-stability}).
@@ -707,19 +717,33 @@ $\mathrm{spread} + \hat q_{\mathrm{pw}} < \pi$; on the evaluation half this rule
 $\alpha{=}0.3$, $57\%$ at $\alpha{=}0.4$, and $67\%$ at $\alpha{=}0.5$ as $\hat q_{\mathrm{pw}}$
 tightens), and the empirical wrong-release rate of the predicted-stable gate is \wrrate{}
 ($\wrnum{}$ of \wrdem{}), so any deployment must retain a TDS fallback for the unresolved
-fraction. Per-machine calibration with Bonferroni/\v{S}id\'ak corrections does not tighten the
+fraction. [Rev. R4] For deployment, rolling calibration windows refreshed on recent contingencies, and
+grouping rules that depend only on observable inputs rather than ground-truth labels, are the
+practical counterparts of the offline Mondrian diagnostic; these are left as future work.
+Per-machine calibration with Bonferroni/\v{S}id\'ak corrections does not tighten the
 bound, and calibrating on the validation set instead of held-out scenarios
 yields only $0.61$ coverage at the nominal $0.90$ target: the held-out-bus distribution is
 genuinely harder, so calibrating on held-out scenarios is necessary rather than a leakage
 concern. The calibration does not transfer across operating points (the $N{-}0$-calibrated interval covers only $0.51$ of
 stable $0.8$-load scenarios and $0.72$ at $0.9$ load), consistent with the operating-point
-limitation of Section~\ref{sec:discussion}. In the gated regime (evaluated on the disjoint half): gate purity \gatepurity{}, coverage
+limitation of Section~\ref{sec:discussion}. [Rev. R6] The derived CCT band is vacuous in the reported configuration: with
+$2\hat q = 296.2^\circ$ at $\alpha{=}0.1$, the conservative endpoints land at the search lower
+bound ($10$ ms) on all $12$ held-out buses, so no scenario is resolved; conformalized monotone
+regression over $t_c$ is a candidate for stabilizing the band and is left as future work.
+In the gated regime (evaluated on the disjoint half): gate purity \gatepurity{}, coverage
 over predicted-stable scenarios \gatecovAll{}, and oracle-conditioned coverage \gatecovTS{}
 (\gatenum{} scenarios; the last conditions on ground-truth labels and is not a deployment
-guarantee, since conditioning on the prediction breaks exchangeability). Alternative scores (amplitude-normalized, first-swing, time-averaged; see the
-repository), adaptive conformal
-methods~\cite{gibbs2021adaptive, lei2014distribution}, and conformalized quantile
-regression~\cite{romano2019conformalized} are candidates for reducing near-boundary conservatism.
+guarantee, since conditioning on the prediction breaks exchangeability). [Rev. R1] Alternative scores trade coverage semantics for tighter bands: an
+amplitude-normalized (relative) score bounds the error to $2.3\%$ of each scenario's peak
+amplitude (coverage $0.854$), a first-swing-window score bounds the first swing to
+$70.8^\circ$ (coverage $0.865$; an offline diagnostic, since the window is defined by the true
+trajectory), and a time-averaged score yields $47.7^\circ$ (coverage $0.893$) but bounds the
+time average rather than the uniform-in-time error; none of these bounds the pairwise spread
+directly, so they complement rather than replace $R_{\mathrm{pw}}$. Perturbation-scaled and
+input-adaptive scores are candidates for tightening near-boundary bands and are left as future
+work, together with adaptive conformal
+methods~\cite{gibbs2021adaptive, lei2014distribution} and conformalized quantile
+regression~\cite{romano2019conformalized}.
 
 \begin{figure}[t]
 \centering
@@ -782,8 +806,12 @@ the assigned 118-bus case ($0.008$--$0.135$ s), with a CCT error of $9.9$ ms mea
 $22.3$ ms) among the 11 buses with a defined first crossing. The split-conformal interval attains $0.918$ coverage at
 $\alpha{=}0.1$ with a half-width of $596.4^\circ$---larger than the $180^\circ$ stability
 threshold, so on the 118-bus case the interval validates the coverage mechanism but is vacuous
-for decisions; the pairwise score and richer calibration data
-are required before the bound is operationally useful at this scale.
+for decisions. [Rev. R5] The directly calibrated pairwise
+score does not recover a nontrivial resolvable fraction there either: at $\alpha{=}0.1$ its
+half-width is $1057.6^\circ$ (coverage $0.918$), and even at $\alpha{=}0.5$ ($91.7^\circ$,
+coverage $0.582$) the rule $\mathrm{spread}+\hat q_{\mathrm{pw}}<\pi$ resolves $0$ of the $88$
+predicted-stable evaluation scenarios, because the predicted spreads themselves sit near the
+$\pi$ threshold; richer calibration data and system-specific scores remain required.
 
 \section{Discussion and Limitations}
 \label{sec:discussion}
@@ -807,9 +835,14 @@ substantially different load levels: classification accuracy drops to $75\%$ at 
 load, and training across multiple load levels does not resolve this (a model trained on four
 load levels attains only $65\%$ on a held-out level). Deployment is therefore a screening tool
 \emph{within} its calibrated operating domain; detecting and rejecting out-of-domain operating
-points (e.g., via the encoding norm or an OOD detector) is left as required future work, and
-operating-point generalization remains the binding obstacle to broader deployment. Sixth, only bolted three-phase faults are
-modeled; parametric fault impedance and line-corridor faults are left to future work.
+points ([Rev. R10] e.g., thresholds on the encoding norm, statistics of the predicted spread,
+or conformal-residual monitors) is left as required future work, and
+operating-point generalization remains the binding obstacle to broader deployment. Sixth, only bolted three-phase
+bus faults are modeled; the encoding is continuous in the fault admittance, so finite-impedance
+faults map to nearby encodings, and a fault along a line corridor can in principle be represented
+by the admittance of the faulted, split line; neither case has been tested. [Rev. R3] Further
+follow-ups include physically informed graph baselines (GNNs fed with $Y$-bus or PTDF/LDF
+features) and hybrid schemes that use TEF/IMEAC to refine the operator's CCT near the boundary.
 
 \section{Conclusion}
 We presented a physics-encoded neural operator for transient stability assessment that predicts
